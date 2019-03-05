@@ -3,6 +3,8 @@
 #include <string.h>
 #include "astlist.h"
 
+ASTList* GlobalInterpreterScope = NULL;
+
 char* Substring(char* text, size_t start, size_t end){
     size_t len = end - start;
     char* s = (char*)malloc(len + 1);
@@ -124,7 +126,8 @@ ASTList* Parser(ASTList* tokens){
 
 ASTList* ExecList(ASTList *ast){
     char* operator;
-    ASTList *a, *b, *cond, *retval;
+    ASTList *a, *b, *tmp, *cond, *retval;
+    ASTItem item;
     if(ast->type == ASTNODE_STR){
         //printf("atom: %s\n", ast->value.str);
         return ast;
@@ -159,6 +162,59 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_LIST;
         retval->value.list = astListSlice(ast->value.list, 1, 0);
         return retval;
+    } else if(strcmp(operator, "set") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        b = ExecList(astListGet(ast->value.list, 2));
+        if((a == NULL) || (b == NULL)){
+            puts("set: nullptr exception");
+            return NULL;
+        } else if(a->type != ASTNODE_STR){
+            puts("set: wrong operands type");
+            return NULL;
+        }
+        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_STR);
+        if(retval == NULL){
+            item.str = a->value.str;
+            astListAppend(&GlobalInterpreterScope, item, ASTNODE_STR);
+            astListAppend(&GlobalInterpreterScope, b->value, b->type);
+            return b;
+        } else {
+            // add replace to astlist.c
+            tmp = retval->next->next;
+            free(retval->next);
+            retval->next = (ASTList*)malloc(sizeof(ASTList));
+            retval->next->next = tmp;
+            retval->next->value = b->value;
+            retval->next->type = b->type;
+            return b;
+        }
+    } else if(strcmp(operator, "get") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        if(a == NULL){
+            puts("get: nullptr exception");
+            return NULL;
+        } else if(a->type != ASTNODE_STR){
+            puts("get: wrong operands type");
+            return NULL;
+        }
+        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_STR);
+        return retval->next;
+    } else if(strcmp(operator, "print") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        if(a == NULL){
+            puts("print: nullptr exception");
+            return NULL;
+        } else if(a->type == ASTNODE_STR){
+            printf("%s\n", a->value.str);
+        } else if(a->type == ASTNODE_NUM){
+            printf("%ld\n", a->value.num);
+        } else if(a->type == ASTNODE_LIST){
+            astListPrint(a->value.list);
+            printf("\n");
+        } else {
+            puts("print: wrong operand type");
+        }
+        return NULL;
     } else if(strcmp(operator, "add") == 0) {
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
@@ -173,22 +229,62 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num + b->value.num;
         return retval;
-    } else if(strcmp(operator, "print") == 0) {
+    } else if(strcmp(operator, "sub") == 0) {
         a = ExecList(astListGet(ast->value.list, 1));
+        b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if(a->type == ASTNODE_STR){
-            printf("%s\n", a->value.str);
-        } else if(a->type == ASTNODE_NUM){
-            printf("%ld\n", a->value.num);
-        } else if(a->type == ASTNODE_LIST){
-            astListPrint(a->value.list);
-            printf("\n");
-        } else {
-            puts("print: wrong operand type");
+        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+            puts("add: wrong operands type");
+            return NULL;
         }
-        return NULL;
+        retval = (ASTList*)malloc(sizeof(ASTList));
+        retval->type = ASTNODE_NUM;
+        retval->value.num = a->value.num - b->value.num;
+        return retval;
+    } else if(strcmp(operator, "mul") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        b = ExecList(astListGet(ast->value.list, 2));
+        if(a == NULL){
+            puts("add: nullptr exception");
+            return NULL;
+        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+            puts("add: wrong operands type");
+            return NULL;
+        }
+        retval = (ASTList*)malloc(sizeof(ASTList));
+        retval->type = ASTNODE_NUM;
+        retval->value.num = a->value.num * b->value.num;
+        return retval;
+    } else if(strcmp(operator, "div") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        b = ExecList(astListGet(ast->value.list, 2));
+        if(a == NULL){
+            puts("add: nullptr exception");
+            return NULL;
+        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+            puts("add: wrong operands type");
+            return NULL;
+        }
+        retval = (ASTList*)malloc(sizeof(ASTList));
+        retval->type = ASTNODE_NUM;
+        retval->value.num = a->value.num / b->value.num;
+        return retval;
+    } else if(strcmp(operator, "mod") == 0) {
+        a = ExecList(astListGet(ast->value.list, 1));
+        b = ExecList(astListGet(ast->value.list, 2));
+        if(a == NULL){
+            puts("add: nullptr exception");
+            return NULL;
+        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+            puts("add: wrong operands type");
+            return NULL;
+        }
+        retval = (ASTList*)malloc(sizeof(ASTList));
+        retval->type = ASTNODE_NUM;
+        retval->value.num = a->value.num % b->value.num;
+        return retval;
     } else if(strcmp(operator, "lt") == 0) {
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
@@ -263,13 +359,13 @@ int main(){
     ASTList *head = NULL, *second = NULL, *third = NULL;
     ASTItem item;
     NilItem.str = (char*)NULL;
-    // head = Tokenize("do (set p (func {x} {(print (get x))})) (p \"hello world\")");
-    head = Tokenize("do (print (add 8 (int 12)))(print \"Hello world!\")");
+    head = Tokenize("do (set x (int 1)) (while (lt (get x) (int 99)) (do (print (get x)) (set x (mul (get x) (int 2))) ))");
+    puts("Lexer output:");
     astListPrint(head);
-    puts("");
+    puts("\nParser output:");
     second = Parser(head);
     astListPrint(second);
-    puts("");
+    puts("\nInterpreter output:");
     item.list = second;
     astListAppend(&third, item, ASTNODE_LIST);
     ExecList(third);

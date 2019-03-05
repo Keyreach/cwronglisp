@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "astlist.h"
 
 size_t astListLen(ASTList **list){
@@ -73,6 +74,7 @@ void astListPrint(ASTList *list){
             printf("\"%s\"%s ", current->value.str, current->next == NULL ? "" : ",");
         } else if(current->type == ASTNODE_LIST) {
             astListPrint(current->value.list);
+            printf(current->next == NULL ? " " : ", ");
         }
         current = current->next;
     }
@@ -93,19 +95,28 @@ ASTList* astListSlice(ASTList *list, size_t start, size_t end){
     size_t counter = start;
     head = astListGet(list, start);
     while((head != NULL) && ((end == 0) || (counter < end))){
-        switch(head->type){
-            case ASTNODE_LIST:
-                astListAppend(&result, head->value, head->type);
-                break;
-            case ASTNODE_STR:
-                astListAppend(&result, head->value, head->type);
-                break;
-            case ASTNODE_NUM:
-                astListAppend(&result, head->value, head->type);
-                break;
-        }
+        astListAppend(&result, head->value, head->type);
         head = head->next;
         counter++;
     }
     return result;
+}
+
+ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type){
+    ASTList* current = haystack;
+    while(current != NULL){
+        if(current->type != type){
+            current = current->next; continue;
+        }
+        if((type == ASTNODE_STR) && (strcmp(needle.str, current->value.str) == 0)){
+            return current;
+        } else if((type == ASTNODE_NUM) && (current->value.num == needle.num)) {
+            return current;
+        } else {
+            puts("Incompatible comparison");
+            return NULL;
+        }
+        current = current->next;
+    }
+    return NULL;
 }

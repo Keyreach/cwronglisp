@@ -23,3 +23,4 @@ void astListAppend(ASTList **list, ASTItem item, unsigned int type);
 ASTList* astListSlice(ASTList *list, size_t start, size_t end);
 void astListPrint(ASTList *list);
 void astListEmpty(ASTList **list);
+ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type);
