@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "astlist.h"
 
 ASTList* GlobalInterpreterScope = NULL;
@@ -358,8 +359,13 @@ ASTList* ExecList(ASTList *ast){
 int main(){
     ASTList *head = NULL, *second = NULL, *third = NULL;
     ASTItem item;
+    size_t bytes_read = 0;
+    char *buffer = (char*)malloc(1024);
     NilItem.str = (char*)NULL;
-    head = Tokenize("do (set x (int 1)) (while (lt (get x) (int 99)) (do (print (get x)) (set x (mul (get x) (int 2))) ))");
+    fread(buffer, 1, 1024, stdin);
+    puts(buffer);
+    head = Tokenize(buffer);
+    //head = Tokenize("do (set x (int 1)) (while (lt (get x) (int 99)) (do (print (get x)) (set x (mul (get x) (int 2))) ))");
     puts("Lexer output:");
     astListPrint(head);
     puts("\nParser output:");

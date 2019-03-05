@@ -104,17 +104,20 @@ ASTList* astListSlice(ASTList *list, size_t start, size_t end){
 
 ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type){
     ASTList* current = haystack;
+    if((type != ASTNODE_STR) && (type != ASTNODE_NUM)){
+        puts("Incompatible comparison");
+        printf("%d\n", type);
+        return NULL;
+    }
     while(current != NULL){
         if(current->type != type){
             current = current->next; continue;
         }
         if((type == ASTNODE_STR) && (strcmp(needle.str, current->value.str) == 0)){
             return current;
-        } else if((type == ASTNODE_NUM) && (current->value.num == needle.num)) {
+        }
+        if((type == ASTNODE_NUM) && (current->value.num == needle.num)) {
             return current;
-        } else {
-            puts("Incompatible comparison");
-            return NULL;
         }
         current = current->next;
     }
