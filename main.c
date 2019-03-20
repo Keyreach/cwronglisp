@@ -4,6 +4,11 @@
 #include <unistd.h>
 #include "astlist.h"
 
+#define SWITCH_OPERATOR(x) if(strcmp(operator, x) == 0){
+#define CASE_OPERATOR(x) } else if(strcmp(operator, x) == 0) {
+#define CASE_DEFAULT } else {
+#define CASE_END }
+
 ASTList* GlobalInterpreterScope = NULL;
 
 char* Substring(char* text, size_t start, size_t end){
@@ -136,7 +141,8 @@ ASTList* ExecList(ASTList *ast){
     //printf("s-expr:\n");
     operator = ExecList(ast->value.list)->value.str;
     //printf("operator: %s\n", operator);
-    if(strcmp(operator, "int") == 0){
+
+    SWITCH_OPERATOR("int")
         a = ExecList(astListGet(ast->value.list, 1));
         if(a == NULL){
             puts("int: nullptr exception");
@@ -149,7 +155,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = strtol(a->value.str, NULL, 10);
         return retval;
-    } else if(strcmp(operator, "do") == 0) {
+
+    CASE_OPERATOR("do")
         retval = NULL;
         a = ast->value.list->next;
         while(a != NULL){
@@ -158,12 +165,14 @@ ASTList* ExecList(ASTList *ast){
             a = a->next;
         }
         return retval;
-    } else if(strcmp(operator, "quote") == 0) {
+
+    CASE_OPERATOR("quote")
         retval = (ASTList*)malloc(sizeof(ASTList));
         retval->type = ASTNODE_LIST;
         retval->value.list = astListSlice(ast->value.list, 1, 0);
         return retval;
-    } else if(strcmp(operator, "set") == 0) {
+
+    CASE_OPERATOR("set")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if((a == NULL) || (b == NULL)){
@@ -189,7 +198,8 @@ ASTList* ExecList(ASTList *ast){
             retval->next->type = b->type;
             return b;
         }
-    } else if(strcmp(operator, "get") == 0) {
+
+    CASE_OPERATOR("get")
         a = ExecList(astListGet(ast->value.list, 1));
         if(a == NULL){
             puts("get: nullptr exception");
@@ -200,7 +210,8 @@ ASTList* ExecList(ASTList *ast){
         }
         retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_STR);
         return retval->next;
-    } else if(strcmp(operator, "print") == 0) {
+
+    CASE_OPERATOR("print")
         a = ExecList(astListGet(ast->value.list, 1));
         if(a == NULL){
             puts("print: nullptr exception");
@@ -216,7 +227,8 @@ ASTList* ExecList(ASTList *ast){
             puts("print: wrong operand type");
         }
         return NULL;
-    } else if(strcmp(operator, "add") == 0) {
+
+    CASE_OPERATOR("add")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -230,7 +242,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num + b->value.num;
         return retval;
-    } else if(strcmp(operator, "sub") == 0) {
+
+    CASE_OPERATOR("sub")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -244,7 +257,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num - b->value.num;
         return retval;
-    } else if(strcmp(operator, "mul") == 0) {
+
+    CASE_OPERATOR("mul")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -258,7 +272,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num * b->value.num;
         return retval;
-    } else if(strcmp(operator, "div") == 0) {
+
+    CASE_OPERATOR("div")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -272,7 +287,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num / b->value.num;
         return retval;
-    } else if(strcmp(operator, "mod") == 0) {
+
+    CASE_OPERATOR("mod")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -286,7 +302,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num % b->value.num;
         return retval;
-    } else if(strcmp(operator, "lt") == 0) {
+
+    CASE_OPERATOR("lt")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -300,7 +317,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num < b->value.num;
         return retval;
-    } else if(strcmp(operator, "gt") == 0) {
+
+    CASE_OPERATOR("gt")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -314,7 +332,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num > b->value.num;
         return retval;
-    } else if(strcmp(operator, "eq") == 0) {
+
+    CASE_OPERATOR("eq")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -328,7 +347,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num == b->value.num;
         return retval;
-    } else if(strcmp(operator, "ne") == 0) {
+
+    CASE_OPERATOR("ne")
         a = ExecList(astListGet(ast->value.list, 1));
         b = ExecList(astListGet(ast->value.list, 2));
         if(a == NULL){
@@ -342,7 +362,8 @@ ASTList* ExecList(ASTList *ast){
         retval->type = ASTNODE_NUM;
         retval->value.num = a->value.num != b->value.num;
         return retval;
-    } else if(strcmp(operator, "while") == 0) {
+
+    CASE_OPERATOR("while")
         a = astListGet(ast->value.list, 1);
         b = astListGet(ast->value.list, 2);
         cond = ExecList(a);
@@ -350,9 +371,11 @@ ASTList* ExecList(ASTList *ast){
             ExecList(b);
             cond = ExecList(a);
         }
-    } else {
+
+    CASE_DEFAULT
         printf("Unknown operator: %s\n", operator);
-    }
+
+    CASE_END
     return NULL;
 }
 
