@@ -3,9 +3,43 @@
 #include <string.h>
 #include "astlist.h"
 
-size_t astListLen(ASTList *list){
+rwzr_list rlist_create(){
+    rwzr_list list = (rwzr_list)malloc(sizeof(rwzr_list_t));
+    list->nodes = NULL;
+    list->cursor = NULL;
+    return list;
+}
+
+void rlist_push(rwzr_list list, void* data){
+    rwzr_node cur, node = (rwzr_node)malloc(sizeof(rwzr_node_t));
+    node->data = data;
+    node->next = NULL;
+    if(list->nodes == NULL){
+        list->nodes = node;
+        list->cursor = node;
+        return;
+    } else {
+        cur = list->nodes;
+        while(cur->next != NULL){ cur = cur->next; }
+        cur->next = node;
+    }
+}
+
+int rlist_end(rwzr_list list){
+    return list->cursor == NULL;
+}
+
+rwzr_value rlist_next(rwzr_list list){
+    rwzr_node tmp;
+    if(list->cursor == NULL) return NULL;
+    tmp = list->cursor;
+    list->cursor = list->cursor->next;
+    return (rwzr_value)(tmp->data);
+}
+
+size_t rlist_len(rwzr_list list){
     size_t length = 0;
-    ASTList current = *list;
+    rwzr_node current = list->nodes;
     while(current != NULL){
         length++;
         current = current->next;
@@ -13,9 +47,23 @@ size_t astListLen(ASTList *list){
     return length;
 }
 
-ASTList astListGet(ASTList list, size_t index){
+rwzr_value rlist_get(rwzr_list list, size_t index){
     size_t counter = 0;
-    ASTList current = list;
+    rwzr_node current = list->nodes;
+    while((counter < index) && (current != NULL)){
+        counter++;
+        current = current->next;
+    }
+    if(current != NULL){
+        return (rwzr_value)(current->data);
+    } else {
+        return NULL;
+    }
+}
+
+rwzr_node rlist_get_node(rwzr_list list, size_t index){
+    size_t counter = 0;
+    rwzr_node current = list->nodes;
     while((counter < index) && (current != NULL)){
         counter++;
         current = current->next;
@@ -27,11 +75,14 @@ ASTList astListGet(ASTList list, size_t index){
     }
 }
 
-void astListDelete(ASTList *list, size_t index){
+void rlist_delete(rwzr_list list, size_t index){
     size_t counter = 0;
-    ASTList tmp = NULL, current = *list;
+    rwzr_node tmp = NULL, current = list->nodes;
     if(index == 0){
-        *list = current->next;
+        tmp = current;
+        list->nodes = current->next;
+        free(tmp->data);
+        free(tmp);
         return;
     }
     while((counter < index - 1) && (current != NULL)){
@@ -40,89 +91,104 @@ void astListDelete(ASTList *list, size_t index){
     }
     if((current != NULL) && (current->next != NULL)){
         tmp = current->next->next;
+        free(current->next->data);
         free(current->next);
         current->next = tmp;
     }
 }
 
-void astListAppend(ASTList *list, ASTItem item, unsigned int type){
-    ASTList newnode, current = NULL;
-    if(*list == NULL){
-        current = (ASTList)malloc(sizeof(ASTList_t));
-        current->type = type;
-        current->value = item;
-        current->next = NULL;
-        *list = current;
-    } else {
-        current = *list;
-        while(current->next != NULL){
-            current = current->next;
-        }
-        newnode = (ASTList)malloc(sizeof(ASTList_t));
-        newnode->type = type;
-        newnode->value = item;
-        newnode->next = NULL;
-        current->next = newnode;
-    }
-}
-
-void astListPrint(ASTList list){
-    ASTList current = list;
+void rlist_print(rwzr_list list){
+    rwzr_node current = list->nodes;
+    rwzr_value cdata;
     printf("[ ");
     while(current != NULL){
-        if(current->type == ASTNODE_STR){
-            printf("\"%s\"%s ", current->value.str, current->next == NULL ? "" : ",");
-        } else if(current->type == ASTNODE_LIST) {
-            astListPrint(current->value.list);
+        cdata = ((rwzr_value)(current->data));
+        if(cdata->type == RWZR_TYPE_STRING){
+            printf("\"%s\"%s ", cdata->data.str, current->next == NULL ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_LIST) {
+            rlist_print(cdata->data.list);
             printf(current->next == NULL ? " " : ", ");
+        } else {
+            printf("unknown type %d\n", cdata->type);
         }
         current = current->next;
     }
     printf("] ");
 }
 
-void astListEmpty(ASTList *list){
-    size_t len = astListLen(list) - 1;
+void rlist_empty(rwzr_list list){
+    size_t len = rlist_len(list) - 1;
     while(len > 0){
-        astListDelete(list, len);
+        rlist_delete(list, len);
         len--;
     }
-    *list = NULL;
+    list->nodes = NULL;
 }
 
-ASTList astListSlice(ASTList list, size_t start, size_t end){
-    ASTList result = NULL, head, item;
+rwzr_list rlist_slice(rwzr_list list, size_t start, size_t end){
+    rwzr_list result = rlist_create();
+    rwzr_node head, item;
     size_t counter = start;
-    head = astListGet(list, start);
+    head = rlist_get_node(list, start);
     while((head != NULL) && ((end == 0) || (counter < end))){
-        astListAppend(&result, head->value, head->type);
+        rlist_push(result, head->data);
         head = head->next;
         counter++;
     }
     return result;
 }
 
-ASTList astListFind(ASTList haystack, ASTItem needle, unsigned int type){
-    ASTList current = haystack;
-    if((type != ASTNODE_STR) && (type != ASTNODE_NUM) && (type != ASTNODE_KEY)){
+rwzr_node rlist_find_node(rwzr_list haystack, rwzr_value needle){
+    rwzr_node current = haystack->nodes;
+    rwzr_value cdata;
+    
+    if((needle->type != RWZR_TYPE_STRING) && (needle->type != RWZR_TYPE_SYMBOL) && (needle->type != RWZR_TYPE_NUMBER)){
         puts("Incompatible comparison");
-        printf("%d\n", type);
+        printf("%d\n", needle->type);
         return NULL;
     }
     while(current != NULL){
-        if(current->type != type){
+        cdata = ((rwzr_value)(current->data));
+        if(cdata->type != needle->type){
             current = current->next; continue;
         }
-        if((type == ASTNODE_STR) && (strcmp(needle.str, current->value.str) == 0)){
+        if((needle->type == RWZR_TYPE_STRING) && (strcmp(needle->data.str, cdata->data.str) == 0)){
             return current;
         }
-        if((type == ASTNODE_KEY) && (strcmp(needle.str, current->value.str) == 0)){
+        if((needle->type == RWZR_TYPE_SYMBOL) && (strcmp(needle->data.str, cdata->data.str) == 0)){
             return current;
         }
-        if((type == ASTNODE_NUM) && (current->value.num == needle.num)) {
+        if((needle->type == RWZR_TYPE_NUMBER) && (cdata->data.num == needle->data.num)) {
             return current;
         }
         current = current->next;
     }
     return NULL;
+}
+
+void* rnode_text(char* s){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    value->type = RWZR_TYPE_STRING;
+    value->data.str = s;
+    return value;
+}
+void* rnode_num(long int x){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    value->type = RWZR_TYPE_NUMBER;
+    value->data.num = x;
+    return value;
+}
+
+void* rnode_list(rwzr_list list){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    value->type = RWZR_TYPE_LIST;
+    value->data.list = list;
+    return value;
+}
+
+void* rnode_sym(char* s){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    value->type = RWZR_TYPE_SYMBOL;
+    value->data.str = s;
+    return value;
 }

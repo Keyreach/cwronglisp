@@ -9,30 +9,10 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
-ASTList GlobalInterpreterScope = NULL;
-
-ASTList NewListNode(ASTList list){
-    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
-    retval->type = ASTNODE_LIST;
-    retval->value.list = list;
-    return retval;
-}
-
-ASTList NewStringNode(char* string){
-    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
-    retval->type = ASTNODE_STR;
-    retval->value.str = string;
-    return retval;
-}
-
-ASTList NewNumNode(long num){
-    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
-    retval->type = ASTNODE_NUM;
-    retval->value.num = num;
-    return retval;
-}
+rwzr_list GlobalInterpreterScope = NULL;
 
 /** key-value helpers **/
+/*
 ASTList PairListGet(ASTList *list, ASTList key){
     ASTList retval = astListFind(*list, key->value, ASTNODE_KEY);
     return retval->next;
@@ -55,6 +35,7 @@ void PairListSet(ASTList *list, ASTList key, ASTList value){
         retval->next->type = value->type;
     }
 }
+*/
 /** **/
 
 char* Substring(char* text, size_t start, size_t end){
@@ -65,9 +46,8 @@ char* Substring(char* text, size_t start, size_t end){
     return s;
 }
 
-ASTList Tokenize(char *code){
-    ASTList tokens = NULL;
-    ASTItem item;
+rwzr_list rwzr_lexer(char *code){
+    rwzr_list tokens = rlist_create();
     size_t tokenStart = -1;
     char c, quoted = 0;
     size_t i, n = strlen(code);
@@ -75,8 +55,10 @@ ASTList Tokenize(char *code){
         c = code[i];
         if(quoted){
             if(c == '"'){
-                item.str = Substring(code, tokenStart, i);
-                astListAppend(&tokens, item, ASTNODE_STR);
+                rlist_push(
+                    tokens,
+                    rnode_text(Substring(code, tokenStart, i))
+                );
                 tokenStart = -1;
                 quoted = 0;
             }
@@ -85,31 +67,25 @@ ASTList Tokenize(char *code){
                 case '(':
                 case ')':
                     if(tokenStart != -1){
-                        item.str = Substring(code, tokenStart, i);
-                        astListAppend(&tokens, item, ASTNODE_STR);
+                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
-                    item.str = (c == '(' ? "(" : ")");
-                    astListAppend(&tokens, item, ASTNODE_STR);
+                    rlist_push(tokens, rnode_text(c == '(' ? "(" : ")"));
                     break;
                 case '{':
                 case '}':
                     if(tokenStart != -1){
-                        item.str = Substring(code, tokenStart, i);
-                        astListAppend(&tokens, item, ASTNODE_STR);
+                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
-                    item.str = c == '{' ? "(" : ")";
-                    astListAppend(&tokens, item, ASTNODE_STR);
+                    rlist_push(tokens, rnode_text(c == '{' ? "(" : ")"));
                     if(c == '{'){
-                        item.str = "quote";
-                        astListAppend(&tokens, item, ASTNODE_STR);
+                        rlist_push(tokens, rnode_text("quote"));
                     }
                     break;
                 case '"':
                     if(tokenStart != -1){
-                        item.str = Substring(code, tokenStart, i);
-                        astListAppend(&tokens, item, ASTNODE_STR);
+                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
                     tokenStart = i + 1;
@@ -117,10 +93,10 @@ ASTList Tokenize(char *code){
                     break;
                 case ' ':
                 case '\n':
+                case '\r':
                 case '\t':
                     if(tokenStart != -1){
-                        item.str = Substring(code, tokenStart, i);
-                        astListAppend(&tokens, item, ASTNODE_STR);
+                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
                     break;
@@ -132,49 +108,45 @@ ASTList Tokenize(char *code){
         }
     }
     if(tokenStart != -1){
-        item.str = Substring(code, tokenStart, i);
-        astListAppend(&tokens, item, ASTNODE_STR);
+        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
         tokenStart = -1;
     }
     return tokens;
 }
 
-ASTList Parser(ASTList tokens){
-    ASTList tree = NULL;
-    ASTList branch = NULL;
-    ASTItem item;
+rwzr_list rwzr_parser(rwzr_list tokens){
+    rwzr_list tree = rlist_create();
+    rwzr_list branch = rlist_create();
     char *token;
     size_t brackets = 0;
-    size_t i, n = astListLen(&tokens);
+    size_t i, n = rlist_len(tokens);
     for(i = 0; i < n; i++){
-        token = astListGet(tokens, i)->value.str;
+        token = rlist_get(tokens, i)->data.str;
         if(strcmp(token, "(") == 0){
             if(brackets > 0){
-                item.str = token;
-                astListAppend(&branch, item, ASTNODE_STR);
+                rlist_push(branch, rnode_text(token));
             }
             brackets++;
         } else if(strcmp(token, ")") == 0) {
             brackets--;
             if(brackets > 0){
-                item.str = token;
-                astListAppend(&branch, item, ASTNODE_STR);
+                rlist_push(branch, rnode_text(token));
             } else {
-                item.list = Parser(branch);
-                astListAppend(&tree, item, ASTNODE_LIST);
-                astListEmpty(&branch);
+                rlist_push(tree, rnode_list(rwzr_parser(branch)));
+                rlist_empty(branch);
             }
         } else {
-            item.str = token;
             if(brackets > 0){
-                astListAppend(&branch, item, ASTNODE_STR);
+                rlist_push(branch, rnode_text(token));
             } else {
-                astListAppend(&tree, item, ASTNODE_STR);
+                rlist_push(tree, rnode_text(token));
             }
         }
     }
     return tree;
 }
+
+/*
 
 ASTList ExecList(ASTList ast){
     char* operator;
@@ -222,24 +194,6 @@ ASTList ExecList(ASTList ast){
             puts("set: wrong operands type");
             return NULL;
         }
-        /*
-        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_KEY);
-        if(retval == NULL){
-            item.str = a->value.str;
-            astListAppend(&GlobalInterpreterScope, item, ASTNODE_KEY);
-            astListAppend(&GlobalInterpreterScope, b->value, b->type);
-            return b;
-        } else {
-            //add replace to astlist.c
-            tmp = retval->next->next;
-            free(retval->next);
-            retval->next = (ASTList*)malloc(sizeof(ASTList));
-            retval->next->next = tmp;
-            retval->next->value = b->value;
-            retval->next->type = b->type;
-            return b;
-        }
-        */
         PairListSet(&GlobalInterpreterScope, a, b);
         return b;
 
@@ -252,10 +206,6 @@ ASTList ExecList(ASTList ast){
             puts("get: wrong operands type");
             return NULL;
         }
-        /*
-        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_KEY);
-        return retval->next;
-        */
         return PairListGet(&GlobalInterpreterScope, a);
 
     CASE_OPERATOR("print")
@@ -399,24 +349,26 @@ ASTList ExecList(ASTList ast){
     return NULL;
 }
 
+*/
+
 int main(){
-    ASTList head = NULL, second = NULL, third = NULL;
-    ASTItem item;
+    rwzr_list head, second, third;
     size_t bytes_read = 0;
     char *buffer = (char*)malloc(1024);
-    NilItem.str = (char*)NULL;
     fread(buffer, 1, 1024, stdin);
     puts(buffer);
-    head = Tokenize(buffer);
+    head = rwzr_lexer(buffer);
     //head = Tokenize("do (set x (int 1)) (while (lt (get x) (int 99)) (do (print (get x)) (set x (mul (get x) (int 2))) ))");
     puts("Lexer output:");
-    astListPrint(head);
+    rlist_print(head);
     puts("\nParser output:");
-    second = Parser(head);
-    astListPrint(second);
+    second = rwzr_parser(head);
+    rlist_print(second);
+    /*
     puts("\nInterpreter output:");
     item.list = second;
     astListAppend(&third, item, ASTNODE_LIST);
-    ExecList(third);
+    */
+    // ExecList(third);
     return 0;
 }
