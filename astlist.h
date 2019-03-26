@@ -1,6 +1,7 @@
 #define ASTNODE_STR 0
 #define ASTNODE_LIST 1
 #define ASTNODE_NUM 2
+#define ASTNODE_KEY 3
 
 typedef union ASTItem {
     char *str;
@@ -12,15 +13,16 @@ typedef struct ASTList {
     char type;
     ASTItem value;
     struct ASTList *next;
-} ASTList;
+} ASTList_t;
+typedef ASTList_t* ASTList;
 
 static ASTItem NilItem;
 
-size_t astListLen(ASTList **list);
-ASTList* astListGet(ASTList *list, size_t index);
-void astListDelete(ASTList **list, size_t index);
-void astListAppend(ASTList **list, ASTItem item, unsigned int type);
-ASTList* astListSlice(ASTList *list, size_t start, size_t end);
-void astListPrint(ASTList *list);
-void astListEmpty(ASTList **list);
-ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type);
+size_t astListLen(ASTList *list);
+ASTList astListGet(ASTList list, size_t index);
+void astListDelete(ASTList *list, size_t index);
+void astListAppend(ASTList *list, ASTItem item, unsigned int type);
+ASTList astListSlice(ASTList list, size_t start, size_t end);
+void astListPrint(ASTList list);
+void astListEmpty(ASTList *list);
+ASTList astListFind(ASTList haystack, ASTItem needle, unsigned int type);

@@ -3,9 +3,9 @@
 #include <string.h>
 #include "astlist.h"
 
-size_t astListLen(ASTList **list){
+size_t astListLen(ASTList *list){
     size_t length = 0;
-    ASTList *current = *list;
+    ASTList current = *list;
     while(current != NULL){
         length++;
         current = current->next;
@@ -13,9 +13,9 @@ size_t astListLen(ASTList **list){
     return length;
 }
 
-ASTList* astListGet(ASTList *list, size_t index){
+ASTList astListGet(ASTList list, size_t index){
     size_t counter = 0;
-    ASTList *current = list;
+    ASTList current = list;
     while((counter < index) && (current != NULL)){
         counter++;
         current = current->next;
@@ -27,9 +27,9 @@ ASTList* astListGet(ASTList *list, size_t index){
     }
 }
 
-void astListDelete(ASTList **list, size_t index){
+void astListDelete(ASTList *list, size_t index){
     size_t counter = 0;
-    ASTList *tmp = NULL, *current = *list;
+    ASTList tmp = NULL, current = *list;
     if(index == 0){
         *list = current->next;
         return;
@@ -45,10 +45,10 @@ void astListDelete(ASTList **list, size_t index){
     }
 }
 
-void astListAppend(ASTList **list, ASTItem item, unsigned int type){
-    ASTList *newnode, *current = NULL;
+void astListAppend(ASTList *list, ASTItem item, unsigned int type){
+    ASTList newnode, current = NULL;
     if(*list == NULL){
-        current = (ASTList*)malloc(sizeof(ASTList));
+        current = (ASTList)malloc(sizeof(ASTList_t));
         current->type = type;
         current->value = item;
         current->next = NULL;
@@ -58,7 +58,7 @@ void astListAppend(ASTList **list, ASTItem item, unsigned int type){
         while(current->next != NULL){
             current = current->next;
         }
-        newnode = (ASTList*)malloc(sizeof(ASTList));
+        newnode = (ASTList)malloc(sizeof(ASTList_t));
         newnode->type = type;
         newnode->value = item;
         newnode->next = NULL;
@@ -66,8 +66,8 @@ void astListAppend(ASTList **list, ASTItem item, unsigned int type){
     }
 }
 
-void astListPrint(ASTList *list){
-    ASTList *current = list;
+void astListPrint(ASTList list){
+    ASTList current = list;
     printf("[ ");
     while(current != NULL){
         if(current->type == ASTNODE_STR){
@@ -81,7 +81,7 @@ void astListPrint(ASTList *list){
     printf("] ");
 }
 
-void astListEmpty(ASTList **list){
+void astListEmpty(ASTList *list){
     size_t len = astListLen(list) - 1;
     while(len > 0){
         astListDelete(list, len);
@@ -90,8 +90,8 @@ void astListEmpty(ASTList **list){
     *list = NULL;
 }
 
-ASTList* astListSlice(ASTList *list, size_t start, size_t end){
-    ASTList* result = NULL, *head, *item;
+ASTList astListSlice(ASTList list, size_t start, size_t end){
+    ASTList result = NULL, head, item;
     size_t counter = start;
     head = astListGet(list, start);
     while((head != NULL) && ((end == 0) || (counter < end))){
@@ -102,9 +102,9 @@ ASTList* astListSlice(ASTList *list, size_t start, size_t end){
     return result;
 }
 
-ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type){
-    ASTList* current = haystack;
-    if((type != ASTNODE_STR) && (type != ASTNODE_NUM)){
+ASTList astListFind(ASTList haystack, ASTItem needle, unsigned int type){
+    ASTList current = haystack;
+    if((type != ASTNODE_STR) && (type != ASTNODE_NUM) && (type != ASTNODE_KEY)){
         puts("Incompatible comparison");
         printf("%d\n", type);
         return NULL;
@@ -114,6 +114,9 @@ ASTList* astListFind(ASTList *haystack, ASTItem needle, unsigned int type){
             current = current->next; continue;
         }
         if((type == ASTNODE_STR) && (strcmp(needle.str, current->value.str) == 0)){
+            return current;
+        }
+        if((type == ASTNODE_KEY) && (strcmp(needle.str, current->value.str) == 0)){
             return current;
         }
         if((type == ASTNODE_NUM) && (current->value.num == needle.num)) {

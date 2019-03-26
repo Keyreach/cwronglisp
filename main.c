@@ -9,7 +9,53 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
-ASTList* GlobalInterpreterScope = NULL;
+ASTList GlobalInterpreterScope = NULL;
+
+ASTList NewListNode(ASTList list){
+    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
+    retval->type = ASTNODE_LIST;
+    retval->value.list = list;
+    return retval;
+}
+
+ASTList NewStringNode(char* string){
+    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
+    retval->type = ASTNODE_STR;
+    retval->value.str = string;
+    return retval;
+}
+
+ASTList NewNumNode(long num){
+    ASTList retval = (ASTList)malloc(sizeof(ASTList_t));
+    retval->type = ASTNODE_NUM;
+    retval->value.num = num;
+    return retval;
+}
+
+/** key-value helpers **/
+ASTList PairListGet(ASTList *list, ASTList key){
+    ASTList retval = astListFind(*list, key->value, ASTNODE_KEY);
+    return retval->next;
+}
+
+void PairListSet(ASTList *list, ASTList key, ASTList value){
+    ASTItem item;
+    ASTList tmp, retval = astListFind(*list, key->value, ASTNODE_KEY);
+    if(retval == NULL){
+        item.str = key->value.str;
+        astListAppend(list, item, ASTNODE_KEY);
+        astListAppend(list, value->value, value->type);
+    } else {
+        // add replace to astlist.c
+        tmp = retval->next->next;
+        free(retval->next);
+        retval->next = (ASTList)malloc(sizeof(ASTList_t));
+        retval->next->next = tmp;
+        retval->next->value = value->value;
+        retval->next->type = value->type;
+    }
+}
+/** **/
 
 char* Substring(char* text, size_t start, size_t end){
     size_t len = end - start;
@@ -19,8 +65,8 @@ char* Substring(char* text, size_t start, size_t end){
     return s;
 }
 
-ASTList* Tokenize(char *code){
-    ASTList *tokens = NULL;
+ASTList Tokenize(char *code){
+    ASTList tokens = NULL;
     ASTItem item;
     size_t tokenStart = -1;
     char c, quoted = 0;
@@ -93,9 +139,9 @@ ASTList* Tokenize(char *code){
     return tokens;
 }
 
-ASTList* Parser(ASTList* tokens){
-    ASTList *tree = NULL;
-    ASTList *branch = NULL;
+ASTList Parser(ASTList tokens){
+    ASTList tree = NULL;
+    ASTList branch = NULL;
     ASTItem item;
     char *token;
     size_t brackets = 0;
@@ -130,9 +176,9 @@ ASTList* Parser(ASTList* tokens){
     return tree;
 }
 
-ASTList* ExecList(ASTList *ast){
+ASTList ExecList(ASTList ast){
     char* operator;
-    ASTList *a, *b, *tmp, *cond, *retval;
+    ASTList a, b, tmp, cond, retval;
     ASTItem item;
     if(ast->type == ASTNODE_STR){
         //printf("atom: %s\n", ast->value.str);
@@ -151,10 +197,7 @@ ASTList* ExecList(ASTList *ast){
             puts("int: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = strtol(a->value.str, NULL, 10);
-        return retval;
+        return NewNumNode(strtol(a->value.str, NULL, 10));
 
     CASE_OPERATOR("do")
         retval = NULL;
@@ -167,10 +210,7 @@ ASTList* ExecList(ASTList *ast){
         return retval;
 
     CASE_OPERATOR("quote")
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_LIST;
-        retval->value.list = astListSlice(ast->value.list, 1, 0);
-        return retval;
+        return NewListNode(astListSlice(ast->value.list, 1, 0));
 
     CASE_OPERATOR("set")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -182,14 +222,15 @@ ASTList* ExecList(ASTList *ast){
             puts("set: wrong operands type");
             return NULL;
         }
-        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_STR);
+        /*
+        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_KEY);
         if(retval == NULL){
             item.str = a->value.str;
-            astListAppend(&GlobalInterpreterScope, item, ASTNODE_STR);
+            astListAppend(&GlobalInterpreterScope, item, ASTNODE_KEY);
             astListAppend(&GlobalInterpreterScope, b->value, b->type);
             return b;
         } else {
-            // add replace to astlist.c
+            //add replace to astlist.c
             tmp = retval->next->next;
             free(retval->next);
             retval->next = (ASTList*)malloc(sizeof(ASTList));
@@ -198,6 +239,9 @@ ASTList* ExecList(ASTList *ast){
             retval->next->type = b->type;
             return b;
         }
+        */
+        PairListSet(&GlobalInterpreterScope, a, b);
+        return b;
 
     CASE_OPERATOR("get")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -208,8 +252,11 @@ ASTList* ExecList(ASTList *ast){
             puts("get: wrong operands type");
             return NULL;
         }
-        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_STR);
+        /*
+        retval = astListFind(GlobalInterpreterScope, a->value, ASTNODE_KEY);
         return retval->next;
+        */
+        return PairListGet(&GlobalInterpreterScope, a);
 
     CASE_OPERATOR("print")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -238,10 +285,7 @@ ASTList* ExecList(ASTList *ast){
             puts("add: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num + b->value.num;
-        return retval;
+        return NewNumNode(a->value.num + b->value.num);
 
     CASE_OPERATOR("sub")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -253,10 +297,7 @@ ASTList* ExecList(ASTList *ast){
             puts("add: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num - b->value.num;
-        return retval;
+        return NewNumNode(a->value.num - b->value.num);
 
     CASE_OPERATOR("mul")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -268,10 +309,7 @@ ASTList* ExecList(ASTList *ast){
             puts("add: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num * b->value.num;
-        return retval;
+        return NewNumNode(a->value.num * b->value.num);
 
     CASE_OPERATOR("div")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -283,10 +321,7 @@ ASTList* ExecList(ASTList *ast){
             puts("add: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num / b->value.num;
-        return retval;
+        return NewNumNode(a->value.num / b->value.num);
 
     CASE_OPERATOR("mod")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -298,10 +333,7 @@ ASTList* ExecList(ASTList *ast){
             puts("add: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num % b->value.num;
-        return retval;
+        return NewNumNode(a->value.num % b->value.num);
 
     CASE_OPERATOR("lt")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -313,10 +345,7 @@ ASTList* ExecList(ASTList *ast){
             puts("lt: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num < b->value.num;
-        return retval;
+        return NewNumNode(a->value.num < b->value.num);
 
     CASE_OPERATOR("gt")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -328,10 +357,7 @@ ASTList* ExecList(ASTList *ast){
             puts("gt: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num > b->value.num;
-        return retval;
+        return NewNumNode(a->value.num > b->value.num);
 
     CASE_OPERATOR("eq")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -343,10 +369,7 @@ ASTList* ExecList(ASTList *ast){
             puts("eq: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num == b->value.num;
-        return retval;
+        return NewNumNode(a->value.num == b->value.num);
 
     CASE_OPERATOR("ne")
         a = ExecList(astListGet(ast->value.list, 1));
@@ -358,10 +381,7 @@ ASTList* ExecList(ASTList *ast){
             puts("ne: wrong operands type");
             return NULL;
         }
-        retval = (ASTList*)malloc(sizeof(ASTList));
-        retval->type = ASTNODE_NUM;
-        retval->value.num = a->value.num != b->value.num;
-        return retval;
+        return NewNumNode(a->value.num != b->value.num);
 
     CASE_OPERATOR("while")
         a = astListGet(ast->value.list, 1);
@@ -380,7 +400,7 @@ ASTList* ExecList(ASTList *ast){
 }
 
 int main(){
-    ASTList *head = NULL, *second = NULL, *third = NULL;
+    ASTList head = NULL, second = NULL, third = NULL;
     ASTItem item;
     size_t bytes_read = 0;
     char *buffer = (char*)malloc(1024);
