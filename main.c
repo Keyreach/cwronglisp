@@ -17,15 +17,22 @@ rwzr_list GlobalInterpreterScope;
 /** key-value helpers **/
 
 rwzr_value pairlist_get(rwzr_list list, char* key){
-    rwzr_value result, keynode = (rwzr_value)rnode_sym(key);
-    rwzr_node retval = rlist_find_node(list, keynode);
-    free(keynode);
+    rwzr_value result, parent_key, keynode = (rwzr_value)rnode_sym(key);
+    rwzr_node parent, retval = rlist_find_node(list, keynode);
     if(retval != NULL){
         result = (rwzr_value)(retval->next->data);
+        free(keynode);
         return result;
-    } else {
+    }
+    free(keynode);
+    parent_key = (rwzr_value)rnode_sym("__parent");
+    parent = rlist_find_node(list, parent_key);
+    if(parent == NULL){
         return NULL;
     }
+    return pairlist_get(
+        ((rwzr_value)(parent->next->data))->data.list, key
+    );
 }
 
 void pairlist_set(rwzr_list list, char* key, rwzr_value value){
