@@ -3,6 +3,7 @@
 #define RWZR_TYPE_LIST 2
 #define RWZR_TYPE_NUMBER 3
 #define RWZR_TYPE_SYMBOL 4
+#define RWZR_TYPE_FUNCTION 5
 
 typedef struct rwzr_node {
     void *data;
@@ -16,10 +17,17 @@ typedef struct rwzr_list {
 } rwzr_list_t;
 typedef rwzr_list_t* rwzr_list;
 
+typedef struct rwzr_function {
+    struct rwzr_list* params;
+    struct rwzr_list* body;
+} rwzr_function_t;
+typedef rwzr_function_t* rwzr_function;
+
 typedef union rwzr_data {
     char *str;
     long num;
     struct rwzr_list *list;
+    struct rwzr_function *func;
 } rwzr_data;
 
 typedef struct rwzr_value {
@@ -28,25 +36,29 @@ typedef struct rwzr_value {
 } rwzr_value_t;
 typedef rwzr_value_t* rwzr_value;
 
-rwzr_list rlist_create();
-void      rlist_push(rwzr_list list, void* data);
-int       rlist_end(rwzr_list list);
-rwzr_node rlist_next(rwzr_list list);
-// to be done
-size_t    rlist_len(rwzr_list list);
+// --prototypes
+rwzr_list  rlist_create();
+void       rlist_push(rwzr_list list, void * data);
+int        rlist_end(rwzr_list list);
+rwzr_node  rlist_next(rwzr_list list);
+rwzr_value rlist_next_value(rwzr_list list);
+void       rlist_rewind(rwzr_list list);
+size_t     rlist_len(rwzr_list list);
 rwzr_value rlist_get(rwzr_list list, size_t index);
-rwzr_node rlist_get_node(rwzr_list list, size_t index);
-void      rlist_delete(rwzr_list list, size_t index);
-rwzr_list rlist_slice(rwzr_list list, size_t start, size_t end);
-void      rlist_print(rwzr_list list);
-void      rlist_empty(rwzr_list list);
-rwzr_node rlist_find_node(rwzr_list haystack, rwzr_value needle);
+rwzr_node  rlist_get_node(rwzr_list list, size_t index);
+void       rlist_delete(rwzr_list list, size_t index);
+rwzr_list  rlist_slice(rwzr_list list, size_t start, size_t end);
+void       rlist_print(rwzr_list list);
+void       rlist_empty(rwzr_list list);
+rwzr_node  rlist_find_node(rwzr_list haystack, rwzr_value needle);
 // node constructors
-void*     rnode_text(char* s);
-void*     rnode_num(long int x);
-void*     rnode_list(rwzr_list list);
-void*     rnode_sym(char* s);
-void*     rnode_copy(rwzr_value val);
-void      rnode_free(rwzr_value data);
+void *     rnode_text(char * s);
+void *     rnode_num(long int x);
+void *     rnode_list(rwzr_list list);
+void *     rnode_sym(char* s);
+void *     rnode_func(rwzr_list params, rwzr_list body);
 //
-long int  rnode_allocs();
+void *     rnode_copy(rwzr_value val);
+void       rnode_free(rwzr_value data);
+//
+long int   rnode_allocs();

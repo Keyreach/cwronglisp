@@ -148,6 +148,23 @@ rwzr_parser(rwzr_list tokens){
 }
 
 rwzr_value
+func_call(rwzr_list arguments){
+    rlist_rewind(arguments);
+    rwzr_value func_name = rlist_next_value(arguments);
+    rwzr_function func_data = pairlist_get(GlobalInterpreterScope, func_name->data.str)->data.func;
+    rlist_rewind(func_data->params);
+    rwzr_list new_scope = rlist_create();
+    rlist_push(new_scope, rnode_sym("__parent"));
+    rlist_push(new_scope, rnode_list(GlobalInterpreterScope));
+    while(!rlist_end(arguments)){
+        rlist_push(new_scope, rlist_next_value(func_data->params));
+        rlist_push(new_scope, rlist_next_value(arguments));
+    }
+    rlist_print(new_scope);
+    return NULL;
+}
+
+rwzr_value
 exec(rwzr_value ast){
     char* operator;
     rwzr_list ops;
@@ -339,6 +356,16 @@ exec(rwzr_value ast){
             exec(b);
             cond = exec(a);
         }
+
+    CASE_OPERATOR("func")
+        a = rlist_get(ops, 1);
+        b = rlist_get(ops, 2);
+        return rnode_func(
+            rlist_slice(a->data.list, 0, 0),
+            rlist_slice(b->data.list, 0, 0)
+        );
+    CASE_OPERATOR("call")
+        return func_call(rlist_slice(ops, 1, 0));
 
     CASE_DEFAULT
         printf("Unknown operator: %s\n", operator);

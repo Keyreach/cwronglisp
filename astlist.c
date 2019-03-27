@@ -45,6 +45,15 @@ rlist_next(rwzr_list list){
     return tmp;
 }
 
+rwzr_value
+rlist_next_value(rwzr_list list){
+    rwzr_node tmp;
+    if(list->cursor == NULL) return NULL;
+    tmp = list->cursor;
+    list->cursor = list->cursor->next;
+    return ((rwzr_value)(tmp->data));
+}
+
 void
 rlist_rewind(rwzr_list list){
     list->cursor = list->nodes;
@@ -132,8 +141,10 @@ rlist_print(rwzr_list list){
             printf("\"%s\"%s ", cdata->data.str, current->next == NULL ? "" : ",");
         } else if(cdata->type == RWZR_TYPE_NUMBER) {
             printf("\"%ld\"%s ", cdata->data.num, current->next == NULL ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_FUNCTION){
+            printf("<function>%s ", current->next == NULL ? "" : ",");
         } else {
-            printf("<unknown type %d>", cdata->type);
+            printf("<unknown type %d>%s ", cdata->type, current->next == NULL ? "" : ",");
         }
         current = current->next;
     }
@@ -226,6 +237,17 @@ rnode_sym(char* s){
     RWZR_MALLOCS++;
     value->type = RWZR_TYPE_SYMBOL;
     value->data.str = s;
+    return value;
+}
+
+void*
+rnode_func(rwzr_list params, rwzr_list body){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
+    value->type = RWZR_TYPE_FUNCTION;
+    value->data.func = (rwzr_function)malloc(sizeof(rwzr_function_t));
+    value->data.func->params = params;
+    value->data.func->body = body;
     return value;
 }
 
