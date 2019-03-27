@@ -9,6 +9,9 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
+
+rwzr_value exec(rwzr_value ast, rwzr_list ctx);
+
 rwzr_list GlobalInterpreterScope;
 
 /** key-value helpers **/
@@ -17,8 +20,12 @@ rwzr_value pairlist_get(rwzr_list list, char* key){
     rwzr_value result, keynode = (rwzr_value)rnode_sym(key);
     rwzr_node retval = rlist_find_node(list, keynode);
     free(keynode);
-    result = (rwzr_value)(retval->next->data);
-    return result;
+    if(retval != NULL){
+        result = (rwzr_value)(retval->next->data);
+        return result;
+    } else {
+        return NULL;
+    }
 }
 
 void pairlist_set(rwzr_list list, char* key, rwzr_value value){
@@ -148,24 +155,36 @@ rwzr_parser(rwzr_list tokens){
 }
 
 rwzr_value
-func_call(rwzr_list arguments){
+func_call(rwzr_list arguments, rwzr_list ctx){
     rlist_rewind(arguments);
-    rwzr_value func_name = rlist_next_value(arguments);
-    rwzr_function func_data = pairlist_get(GlobalInterpreterScope, func_name->data.str)->data.func;
-    rlist_rewind(func_data->params);
+    rwzr_value result, tmp, func_name = rlist_next_value(arguments);
+    if((func_name == NULL) || (func_name->type != RWZR_TYPE_STRING)){
+        puts("call: invalid identifier");
+        return NULL;
+    }
+    rwzr_value func_data = pairlist_get(GlobalInterpreterScope, func_name->data.str);
+    if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION)){
+        puts("call: no function");
+        return NULL;
+    }
+    rwzr_function func = func_data->data.func;
+    rlist_rewind(func->params);
     rwzr_list new_scope = rlist_create();
     rlist_push(new_scope, rnode_sym("__parent"));
     rlist_push(new_scope, rnode_list(GlobalInterpreterScope));
     while(!rlist_end(arguments)){
-        rlist_push(new_scope, rlist_next_value(func_data->params));
-        rlist_push(new_scope, rlist_next_value(arguments));
+        tmp = rlist_next_value(func->params);
+        tmp->type = RWZR_TYPE_SYMBOL;
+        rlist_push(new_scope, tmp);
+        rlist_push(new_scope, exec(rlist_next_value(arguments), ctx));
     }
-    rlist_print(new_scope);
-    return NULL;
+    result = exec(rnode_list(func->body), new_scope);
+    rlist_empty(new_scope);
+    return result;
 }
 
 rwzr_value
-exec(rwzr_value ast){
+exec(rwzr_value ast, rwzr_list ctx){
     char* operator;
     rwzr_list ops;
     rwzr_node temp_node;
@@ -174,9 +193,9 @@ exec(rwzr_value ast){
         return (rwzr_value)rnode_copy(ast);
     }
     ops = ast->data.list;
-    operator = exec(rlist_get(ops, 0))->data.str;
+    operator = exec(rlist_get(ops, 0), ctx)->data.str;
     SWITCH_OPERATOR("int")
-        a = exec(rlist_get(ops, 1));
+        a = exec(rlist_get(ops, 1), ctx);
         if(a == NULL){
             puts("int: nullptr exception");
             return NULL;
@@ -191,7 +210,7 @@ exec(rwzr_value ast){
         temp_node = ops->nodes->next;
         while(temp_node != NULL){
             if(retval != NULL) free(retval);
-            retval = exec((rwzr_value)(temp_node->data));
+            retval = exec((rwzr_value)(temp_node->data), ctx);
             temp_node = temp_node->next;
         }
         return retval;
@@ -200,8 +219,8 @@ exec(rwzr_value ast){
         return rnode_list(rlist_slice(ops, 1, 0));
 
     CASE_OPERATOR("set")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if((a == NULL) || (b == NULL)){
             puts("set: nullptr exception");
             return NULL;
@@ -209,11 +228,11 @@ exec(rwzr_value ast){
             puts("set: wrong operands type");
             return NULL;
         }
-        pairlist_set(GlobalInterpreterScope, a->data.str, b);
+        pairlist_set(ctx, a->data.str, b);
         return b;
 
     CASE_OPERATOR("get")
-        a = exec(rlist_get(ops, 1));
+        a = exec(rlist_get(ops, 1), ctx);
         if(a == NULL){
             puts("get: nullptr exception");
             return NULL;
@@ -221,10 +240,10 @@ exec(rwzr_value ast){
             puts("get: wrong operands type");
             return NULL;
         }
-        return pairlist_get(GlobalInterpreterScope, a->data.str);
+        return pairlist_get(ctx, a->data.str);
 
     CASE_OPERATOR("print")
-        a = exec(rlist_get(ops, 1));
+        a = exec(rlist_get(ops, 1), ctx);
         if(a == NULL){
             puts("print: nullptr exception");
             return NULL;
@@ -241,8 +260,8 @@ exec(rwzr_value ast){
         return NULL;
 
     CASE_OPERATOR("add")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
@@ -253,8 +272,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num + b->data.num);
 
     CASE_OPERATOR("sub")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
@@ -265,8 +284,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num - b->data.num);
 
     CASE_OPERATOR("mul")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
@@ -277,8 +296,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num * b->data.num);
 
     CASE_OPERATOR("div")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
@@ -289,8 +308,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num / b->data.num);
 
     CASE_OPERATOR("mod")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
@@ -301,8 +320,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num % b->data.num);
 
     CASE_OPERATOR("lt")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("lt: nullptr exception");
             return NULL;
@@ -313,8 +332,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num < b->data.num);
 
     CASE_OPERATOR("gt")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("gt: nullptr exception");
             return NULL;
@@ -325,8 +344,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num > b->data.num);
 
     CASE_OPERATOR("eq")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("eq: nullptr exception");
             return NULL;
@@ -337,8 +356,8 @@ exec(rwzr_value ast){
         return rnode_num(a->data.num == b->data.num);
 
     CASE_OPERATOR("ne")
-        a = exec(rlist_get(ops, 1));
-        b = exec(rlist_get(ops, 2));
+        a = exec(rlist_get(ops, 1), ctx);
+        b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("ne: nullptr exception");
             return NULL;
@@ -351,10 +370,10 @@ exec(rwzr_value ast){
     CASE_OPERATOR("while")
         a = rlist_get(ops, 1);
         b = rlist_get(ops, 2);
-        cond = exec(a);
+        cond = exec(a, ctx);
         while((cond != NULL) && (cond->type == RWZR_TYPE_NUMBER) && (cond->data.num != 0)){
-            exec(b);
-            cond = exec(a);
+            exec(b, ctx);
+            cond = exec(a, ctx);
         }
 
     CASE_OPERATOR("func")
@@ -365,7 +384,7 @@ exec(rwzr_value ast){
             rlist_slice(b->data.list, 0, 0)
         );
     CASE_OPERATOR("call")
-        return func_call(rlist_slice(ops, 1, 0));
+        return func_call(rlist_slice(ops, 1, 0), ctx);
 
     CASE_DEFAULT
         printf("Unknown operator: %s\n", operator);
@@ -390,7 +409,7 @@ int main(){
     rlist_empty(head);
     rlist_print(second);
     puts("\nInterpreter output:");
-    exec(rnode_list(second));
+    exec(rnode_list(second), GlobalInterpreterScope);
     rlist_empty(second);
     printf("= %ld\n", rnode_allocs());
     return 0;
