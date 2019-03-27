@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include "astlist.h"
 
 #define SWITCH_OPERATOR(x) if(strcmp(operator, x) == 0){
@@ -9,14 +8,20 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
-
+rwzr_value pairlist_get(rwzr_list list, char* key);
+void       pairlist_set(rwzr_list list, char* key, rwzr_value value);
+char*      Substring(char* text, size_t start, size_t end);
 rwzr_value exec(rwzr_value ast, rwzr_list ctx);
+rwzr_list  rwzr_lexer(char *code);
+rwzr_list  rwzr_parser(rwzr_list tokens);
+rwzr_value func_call(rwzr_list arguments, rwzr_list ctx);
 
-rwzr_list GlobalInterpreterScope;
+rwzr_list  global_context;
 
 /** key-value helpers **/
 
-rwzr_value pairlist_get(rwzr_list list, char* key){
+rwzr_value
+pairlist_get(rwzr_list list, char* key){
     rwzr_value result, parent_key, keynode = (rwzr_value)rnode_sym(key);
     rwzr_node parent, retval = rlist_find_node(list, keynode);
     if(retval != NULL){
@@ -35,7 +40,8 @@ rwzr_value pairlist_get(rwzr_list list, char* key){
     );
 }
 
-void pairlist_set(rwzr_list list, char* key, rwzr_value value){
+void
+pairlist_set(rwzr_list list, char* key, rwzr_value value){
     rwzr_value keynode = (rwzr_value)rnode_sym(key);
     rwzr_node retval = rlist_find_node(list, keynode);
     if(retval == NULL){
@@ -51,7 +57,8 @@ void pairlist_set(rwzr_list list, char* key, rwzr_value value){
 
 /** **/
 
-char* Substring(char* text, size_t start, size_t end){
+char*
+Substring(char* text, size_t start, size_t end){
     size_t len = end - start;
     char* s = (char*)malloc(len + 1);
     memcpy(s, text + start, len);
@@ -169,7 +176,7 @@ func_call(rwzr_list arguments, rwzr_list ctx){
         puts("call: invalid identifier");
         return NULL;
     }
-    rwzr_value func_data = pairlist_get(GlobalInterpreterScope, func_name->data.str);
+    rwzr_value func_data = pairlist_get(ctx, func_name->data.str);
     if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION)){
         puts("call: no function");
         return NULL;
@@ -178,7 +185,7 @@ func_call(rwzr_list arguments, rwzr_list ctx){
     rlist_rewind(func->params);
     rwzr_list new_scope = rlist_create();
     rlist_push(new_scope, rnode_sym("__parent"));
-    rlist_push(new_scope, rnode_list(GlobalInterpreterScope));
+    rlist_push(new_scope, rnode_list(ctx));
     while(!rlist_end(arguments)){
         tmp = rlist_next_value(func->params);
         tmp->type = RWZR_TYPE_SYMBOL;
@@ -195,7 +202,7 @@ exec(rwzr_value ast, rwzr_list ctx){
     char* operator;
     rwzr_list ops;
     rwzr_node temp_node;
-    rwzr_value a, b, cond, retval; // <- must rnode_free them;
+    rwzr_value a, b, cond, retval; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
         return (rwzr_value)rnode_copy(ast);
     }
@@ -390,6 +397,7 @@ exec(rwzr_value ast, rwzr_list ctx){
             rlist_slice(a->data.list, 0, 0),
             rlist_slice(b->data.list, 0, 0)
         );
+
     CASE_OPERATOR("call")
         return func_call(rlist_slice(ops, 1, 0), ctx);
 
@@ -403,12 +411,11 @@ exec(rwzr_value ast, rwzr_list ctx){
 
 int main(){
     rwzr_list head, second;
-    GlobalInterpreterScope = rlist_create();
+    global_context = rlist_create();
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
     puts(buffer);
     head = rwzr_lexer(buffer);
-    //head = Tokenize("do (set x (int 1)) (while (lt (get x) (int 99)) (do (print (get x)) (set x (mul (get x) (int 2))) ))");
     puts("Lexer output:");
     rlist_print(head);
     puts("\nParser output:");
@@ -416,7 +423,7 @@ int main(){
     rlist_empty(head);
     rlist_print(second);
     puts("\nInterpreter output:");
-    exec(rnode_list(second), GlobalInterpreterScope);
+    exec(rnode_list(second), global_context);
     rlist_empty(second);
     printf("= %ld\n", rnode_allocs());
     return 0;
