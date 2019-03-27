@@ -31,7 +31,7 @@ typedef rwzr_value_t* rwzr_value;
 rwzr_list rlist_create();
 void      rlist_push(rwzr_list list, void* data);
 int       rlist_end(rwzr_list list);
-rwzr_value rlist_next(rwzr_list list);
+rwzr_node rlist_next(rwzr_list list);
 // to be done
 size_t    rlist_len(rwzr_list list);
 rwzr_value rlist_get(rwzr_list list, size_t index);
@@ -46,3 +46,7 @@ void*     rnode_text(char* s);
 void*     rnode_num(long int x);
 void*     rnode_list(rwzr_list list);
 void*     rnode_sym(char* s);
+void*     rnode_copy(rwzr_value val);
+void      rnode_free(rwzr_value data);
+//
+long int  rnode_allocs();

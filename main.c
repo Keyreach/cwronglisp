@@ -9,33 +9,32 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
-rwzr_list GlobalInterpreterScope = NULL;
+rwzr_list GlobalInterpreterScope;
 
 /** key-value helpers **/
-/*
-ASTList PairListGet(ASTList *list, ASTList key){
-    ASTList retval = astListFind(*list, key->value, ASTNODE_KEY);
-    return retval->next;
+
+rwzr_value pairlist_get(rwzr_list list, char* key){
+    rwzr_value result, keynode = (rwzr_value)rnode_sym(key);
+    rwzr_node retval = rlist_find_node(list, keynode);
+    free(keynode);
+    result = (rwzr_value)(retval->next->data);
+    return result;
 }
 
-void PairListSet(ASTList *list, ASTList key, ASTList value){
-    ASTItem item;
-    ASTList tmp, retval = astListFind(*list, key->value, ASTNODE_KEY);
+void pairlist_set(rwzr_list list, char* key, rwzr_value value){
+    rwzr_value keynode = (rwzr_value)rnode_sym(key);
+    rwzr_node retval = rlist_find_node(list, keynode);
     if(retval == NULL){
-        item.str = key->value.str;
-        astListAppend(list, item, ASTNODE_KEY);
-        astListAppend(list, value->value, value->type);
+        rlist_push(list, (void*)keynode);
+        rlist_push(list, (void*)rnode_copy(value));
     } else {
         // add replace to astlist.c
-        tmp = retval->next->next;
-        free(retval->next);
-        retval->next = (ASTList)malloc(sizeof(ASTList_t));
-        retval->next->next = tmp;
-        retval->next->value = value->value;
-        retval->next->type = value->type;
+        free(keynode);
+        free(retval->next->data);
+        retval->next->data = (void*)rnode_copy(value);
     }
 }
-*/
+
 /** **/
 
 char* Substring(char* text, size_t start, size_t end){
@@ -46,7 +45,8 @@ char* Substring(char* text, size_t start, size_t end){
     return s;
 }
 
-rwzr_list rwzr_lexer(char *code){
+rwzr_list
+rwzr_lexer(char *code){
     rwzr_list tokens = rlist_create();
     size_t tokenStart = -1;
     char c, quoted = 0;
@@ -114,7 +114,8 @@ rwzr_list rwzr_lexer(char *code){
     return tokens;
 }
 
-rwzr_list rwzr_parser(rwzr_list tokens){
+rwzr_list
+rwzr_parser(rwzr_list tokens){
     rwzr_list tree = rlist_create();
     rwzr_list branch = rlist_create();
     char *token;
@@ -146,200 +147,197 @@ rwzr_list rwzr_parser(rwzr_list tokens){
     return tree;
 }
 
-/*
-
-ASTList ExecList(ASTList ast){
+rwzr_value
+exec(rwzr_value ast){
     char* operator;
-    ASTList a, b, tmp, cond, retval;
-    ASTItem item;
-    if(ast->type == ASTNODE_STR){
-        //printf("atom: %s\n", ast->value.str);
-        return ast;
+    rwzr_list ops;
+    rwzr_node temp_node;
+    rwzr_value a, b, cond, retval; // <- must rnode_free them;
+    if(ast->type == RWZR_TYPE_STRING){
+        return (rwzr_value)rnode_copy(ast);
     }
-    //printf("s-expr:\n");
-    operator = ExecList(ast->value.list)->value.str;
-    //printf("operator: %s\n", operator);
-
+    ops = ast->data.list;
+    operator = exec(rlist_get(ops, 0))->data.str;
     SWITCH_OPERATOR("int")
-        a = ExecList(astListGet(ast->value.list, 1));
+        a = exec(rlist_get(ops, 1));
         if(a == NULL){
             puts("int: nullptr exception");
             return NULL;
-        } else if(a->type != ASTNODE_STR){
+        } else if(a->type != RWZR_TYPE_STRING){
             puts("int: wrong operands type");
             return NULL;
         }
-        return NewNumNode(strtol(a->value.str, NULL, 10));
+        return rnode_num(strtol(a->data.str, NULL, 10));
 
     CASE_OPERATOR("do")
         retval = NULL;
-        a = ast->value.list->next;
-        while(a != NULL){
+        temp_node = ops->nodes->next;
+        while(temp_node != NULL){
             if(retval != NULL) free(retval);
-            retval = ExecList(a);
-            a = a->next;
+            retval = exec((rwzr_value)(temp_node->data));
+            temp_node = temp_node->next;
         }
         return retval;
 
     CASE_OPERATOR("quote")
-        return NewListNode(astListSlice(ast->value.list, 1, 0));
+        return rnode_list(rlist_slice(ops, 1, 0));
 
     CASE_OPERATOR("set")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if((a == NULL) || (b == NULL)){
             puts("set: nullptr exception");
             return NULL;
-        } else if(a->type != ASTNODE_STR){
+        } else if(a->type != RWZR_TYPE_STRING){
             puts("set: wrong operands type");
             return NULL;
         }
-        PairListSet(&GlobalInterpreterScope, a, b);
+        pairlist_set(GlobalInterpreterScope, a->data.str, b);
         return b;
 
     CASE_OPERATOR("get")
-        a = ExecList(astListGet(ast->value.list, 1));
+        a = exec(rlist_get(ops, 1));
         if(a == NULL){
             puts("get: nullptr exception");
             return NULL;
-        } else if(a->type != ASTNODE_STR){
+        } else if(a->type != RWZR_TYPE_STRING){
             puts("get: wrong operands type");
             return NULL;
         }
-        return PairListGet(&GlobalInterpreterScope, a);
+        return pairlist_get(GlobalInterpreterScope, a->data.str);
 
     CASE_OPERATOR("print")
-        a = ExecList(astListGet(ast->value.list, 1));
+        a = exec(rlist_get(ops, 1));
         if(a == NULL){
             puts("print: nullptr exception");
             return NULL;
-        } else if(a->type == ASTNODE_STR){
-            printf("%s\n", a->value.str);
-        } else if(a->type == ASTNODE_NUM){
-            printf("%ld\n", a->value.num);
-        } else if(a->type == ASTNODE_LIST){
-            astListPrint(a->value.list);
+        } else if(a->type == RWZR_TYPE_STRING){
+            printf("%s\n", a->data.str);
+        } else if(a->type == RWZR_TYPE_NUMBER){
+            printf("%ld\n", a->data.num);
+        } else if(a->type == RWZR_TYPE_LIST){
+            rlist_print(a->data.list);
             printf("\n");
         } else {
-            puts("print: wrong operand type");
+            printf("print: wrong operand type %d\n", a->type);
         }
         return NULL;
 
     CASE_OPERATOR("add")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num + b->value.num);
+        return rnode_num(a->data.num + b->data.num);
 
     CASE_OPERATOR("sub")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num - b->value.num);
+        return rnode_num(a->data.num - b->data.num);
 
     CASE_OPERATOR("mul")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num * b->value.num);
+        return rnode_num(a->data.num * b->data.num);
 
     CASE_OPERATOR("div")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num / b->value.num);
+        return rnode_num(a->data.num / b->data.num);
 
     CASE_OPERATOR("mod")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("add: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num % b->value.num);
+        return rnode_num(a->data.num % b->data.num);
 
     CASE_OPERATOR("lt")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("lt: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("lt: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num < b->value.num);
+        return rnode_num(a->data.num < b->data.num);
 
     CASE_OPERATOR("gt")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("gt: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("gt: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num > b->value.num);
+        return rnode_num(a->data.num > b->data.num);
 
     CASE_OPERATOR("eq")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("eq: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("eq: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num == b->value.num);
+        return rnode_num(a->data.num == b->data.num);
 
     CASE_OPERATOR("ne")
-        a = ExecList(astListGet(ast->value.list, 1));
-        b = ExecList(astListGet(ast->value.list, 2));
+        a = exec(rlist_get(ops, 1));
+        b = exec(rlist_get(ops, 2));
         if(a == NULL){
             puts("ne: nullptr exception");
             return NULL;
-        } else if((a->type != ASTNODE_NUM) || (b->type != ASTNODE_NUM)){
+        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("ne: wrong operands type");
             return NULL;
         }
-        return NewNumNode(a->value.num != b->value.num);
+        return rnode_num(a->data.num != b->data.num);
 
     CASE_OPERATOR("while")
-        a = astListGet(ast->value.list, 1);
-        b = astListGet(ast->value.list, 2);
-        cond = ExecList(a);
-        while((cond != NULL) && (cond->type == ASTNODE_NUM) && (cond->value.num != 0)){
-            ExecList(b);
-            cond = ExecList(a);
+        a = rlist_get(ops, 1);
+        b = rlist_get(ops, 2);
+        cond = exec(a);
+        while((cond != NULL) && (cond->type == RWZR_TYPE_NUMBER) && (cond->data.num != 0)){
+            exec(b);
+            cond = exec(a);
         }
 
     CASE_DEFAULT
@@ -349,11 +347,10 @@ ASTList ExecList(ASTList ast){
     return NULL;
 }
 
-*/
 
 int main(){
-    rwzr_list head, second, third;
-    size_t bytes_read = 0;
+    rwzr_list head, second;
+    GlobalInterpreterScope = rlist_create();
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
     puts(buffer);
@@ -363,12 +360,11 @@ int main(){
     rlist_print(head);
     puts("\nParser output:");
     second = rwzr_parser(head);
+    rlist_empty(head);
     rlist_print(second);
-    /*
     puts("\nInterpreter output:");
-    item.list = second;
-    astListAppend(&third, item, ASTNODE_LIST);
-    */
-    // ExecList(third);
+    exec(rnode_list(second));
+    rlist_empty(second);
+    printf("= %ld\n", rnode_allocs());
     return 0;
 }

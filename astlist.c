@@ -3,15 +3,21 @@
 #include <string.h>
 #include "astlist.h"
 
-rwzr_list rlist_create(){
+static long int RWZR_MALLOCS = 0;
+
+rwzr_list
+rlist_create(){
     rwzr_list list = (rwzr_list)malloc(sizeof(rwzr_list_t));
+    //RWZR_MALLOCS++;
     list->nodes = NULL;
     list->cursor = NULL;
     return list;
 }
 
-void rlist_push(rwzr_list list, void* data){
+void
+rlist_push(rwzr_list list, void* data){
     rwzr_node cur, node = (rwzr_node)malloc(sizeof(rwzr_node_t));
+    RWZR_MALLOCS++;
     node->data = data;
     node->next = NULL;
     if(list->nodes == NULL){
@@ -25,19 +31,27 @@ void rlist_push(rwzr_list list, void* data){
     }
 }
 
-int rlist_end(rwzr_list list){
+int
+rlist_end(rwzr_list list){
     return list->cursor == NULL;
 }
 
-rwzr_value rlist_next(rwzr_list list){
+rwzr_node
+rlist_next(rwzr_list list){
     rwzr_node tmp;
     if(list->cursor == NULL) return NULL;
     tmp = list->cursor;
     list->cursor = list->cursor->next;
-    return (rwzr_value)(tmp->data);
+    return tmp;
 }
 
-size_t rlist_len(rwzr_list list){
+void
+rlist_rewind(rwzr_list list){
+    list->cursor = list->nodes;
+}
+
+size_t
+rlist_len(rwzr_list list){
     size_t length = 0;
     rwzr_node current = list->nodes;
     while(current != NULL){
@@ -47,7 +61,8 @@ size_t rlist_len(rwzr_list list){
     return length;
 }
 
-rwzr_value rlist_get(rwzr_list list, size_t index){
+rwzr_value
+rlist_get(rwzr_list list, size_t index){
     size_t counter = 0;
     rwzr_node current = list->nodes;
     while((counter < index) && (current != NULL)){
@@ -61,7 +76,8 @@ rwzr_value rlist_get(rwzr_list list, size_t index){
     }
 }
 
-rwzr_node rlist_get_node(rwzr_list list, size_t index){
+rwzr_node
+rlist_get_node(rwzr_list list, size_t index){
     size_t counter = 0;
     rwzr_node current = list->nodes;
     while((counter < index) && (current != NULL)){
@@ -75,7 +91,8 @@ rwzr_node rlist_get_node(rwzr_list list, size_t index){
     }
 }
 
-void rlist_delete(rwzr_list list, size_t index){
+void
+rlist_delete(rwzr_list list, size_t index){
     size_t counter = 0;
     rwzr_node tmp = NULL, current = list->nodes;
     if(index == 0){
@@ -83,6 +100,7 @@ void rlist_delete(rwzr_list list, size_t index){
         list->nodes = current->next;
         free(tmp->data);
         free(tmp);
+        RWZR_MALLOCS -= 2;
         return;
     }
     while((counter < index - 1) && (current != NULL)){
@@ -93,11 +111,13 @@ void rlist_delete(rwzr_list list, size_t index){
         tmp = current->next->next;
         free(current->next->data);
         free(current->next);
+        RWZR_MALLOCS -= 2;
         current->next = tmp;
     }
 }
 
-void rlist_print(rwzr_list list){
+void
+rlist_print(rwzr_list list){
     rwzr_node current = list->nodes;
     rwzr_value cdata;
     printf("[ ");
@@ -108,26 +128,34 @@ void rlist_print(rwzr_list list){
         } else if(cdata->type == RWZR_TYPE_LIST) {
             rlist_print(cdata->data.list);
             printf(current->next == NULL ? " " : ", ");
+        } else if(cdata->type == RWZR_TYPE_SYMBOL) {
+            printf("\"%s\"%s ", cdata->data.str, current->next == NULL ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_NUMBER) {
+            printf("\"%ld\"%s ", cdata->data.num, current->next == NULL ? "" : ",");
         } else {
-            printf("unknown type %d\n", cdata->type);
+            printf("<unknown type %d>", cdata->type);
         }
         current = current->next;
     }
     printf("] ");
 }
 
-void rlist_empty(rwzr_list list){
-    size_t len = rlist_len(list) - 1;
-    while(len > 0){
-        rlist_delete(list, len);
-        len--;
+void
+rlist_empty(rwzr_list list){
+    rwzr_node current;
+    while(!rlist_end(list)){
+        current = rlist_next(list);
+        rnode_free(current->data);
+        free(current);
+        RWZR_MALLOCS -= 2;
     }
     list->nodes = NULL;
 }
 
-rwzr_list rlist_slice(rwzr_list list, size_t start, size_t end){
+rwzr_list
+rlist_slice(rwzr_list list, size_t start, size_t end){
     rwzr_list result = rlist_create();
-    rwzr_node head, item;
+    rwzr_node head;
     size_t counter = start;
     head = rlist_get_node(list, start);
     while((head != NULL) && ((end == 0) || (counter < end))){
@@ -138,10 +166,10 @@ rwzr_list rlist_slice(rwzr_list list, size_t start, size_t end){
     return result;
 }
 
-rwzr_node rlist_find_node(rwzr_list haystack, rwzr_value needle){
+rwzr_node
+rlist_find_node(rwzr_list haystack, rwzr_value needle){
     rwzr_node current = haystack->nodes;
     rwzr_value cdata;
-    
     if((needle->type != RWZR_TYPE_STRING) && (needle->type != RWZR_TYPE_SYMBOL) && (needle->type != RWZR_TYPE_NUMBER)){
         puts("Incompatible comparison");
         printf("%d\n", needle->type);
@@ -166,29 +194,62 @@ rwzr_node rlist_find_node(rwzr_list haystack, rwzr_value needle){
     return NULL;
 }
 
-void* rnode_text(char* s){
+void*
+rnode_text(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
     value->type = RWZR_TYPE_STRING;
     value->data.str = s;
     return value;
 }
-void* rnode_num(long int x){
+void*
+rnode_num(long int x){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
     value->type = RWZR_TYPE_NUMBER;
     value->data.num = x;
     return value;
 }
 
-void* rnode_list(rwzr_list list){
+void*
+rnode_list(rwzr_list list){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
     value->type = RWZR_TYPE_LIST;
     value->data.list = list;
     return value;
 }
 
-void* rnode_sym(char* s){
+void*
+rnode_sym(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
     value->type = RWZR_TYPE_SYMBOL;
     value->data.str = s;
     return value;
+}
+
+void*
+rnode_copy(rwzr_value val){
+    rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
+    RWZR_MALLOCS++;
+    value->type = val->type;
+    value->data = val->data;
+    return value;
+}
+
+void
+rnode_free(rwzr_value data){
+    switch(data->type){
+        case RWZR_TYPE_LIST:
+            rlist_empty(data->data.list);
+            break;
+        /** DON'T FREE STRINGS AS THEY'RE NOT CLONED DURING STAGES **/
+    }
+    free(data);
+}
+
+long int
+rnode_allocs(){
+    return RWZR_MALLOCS;
 }
