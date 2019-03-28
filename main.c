@@ -28,12 +28,13 @@ pairlist_get(rwzr_list list, char* key){
     rwzr_node parent, retval = rlist_find_node(list, keynode);
     if(retval != NULL){
         result = (rwzr_value)(retval->next->data);
-        free(keynode);
+        rnode_free(keynode);
         return (rwzr_value)rnode_copy(result);
     }
-    free(keynode);
+    rnode_free(keynode);
     parent_key = (rwzr_value)rnode_sym("__parent");
     parent = rlist_find_node(list, parent_key);
+    rnode_free(parent_key);
     if(parent == NULL){
         return NULL;
     }
@@ -435,6 +436,7 @@ int main(){
     puts("\nInterpreter output:");
     exec(rnode_list(second), global_context, 0);
     rlist_empty(second);
+    rlist_empty(global_context);
     printf("= %ld\n", rnode_allocs());
     return 0;
 }

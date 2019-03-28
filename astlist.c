@@ -4,6 +4,8 @@
 #include "astlist.h"
 
 static long int RWZR_MALLOCS = 0;
+static long int RWZR_NODES = 0;
+static long int RWZR_VALUES = 0;
 
 rwzr_list
 rlist_create(){
@@ -18,6 +20,7 @@ void
 rlist_push(rwzr_list list, void* data){
     rwzr_node cur, node = (rwzr_node)malloc(sizeof(rwzr_node_t));
     RWZR_MALLOCS++;
+    RWZR_NODES++;
     node->data = data;
     node->next = NULL;
     if(list->nodes == NULL){
@@ -110,6 +113,7 @@ rlist_delete(rwzr_list list, size_t index){
         rnode_free(tmp->data);
         free(tmp);
         RWZR_MALLOCS -= 1;
+        RWZR_NODES -= 1;
         return;
     }
     while((counter < index - 1) && (current != NULL)){
@@ -121,6 +125,7 @@ rlist_delete(rwzr_list list, size_t index){
         rnode_free(current->next->data);
         free(current->next);
         RWZR_MALLOCS -= 1;
+        RWZR_NODES -= 1;
         current->next = tmp;
     }
 }
@@ -154,12 +159,15 @@ rlist_print(rwzr_list list){
 void
 rlist_empty(rwzr_list list){
     rwzr_node current;
+    rlist_rewind(list);
     while(!rlist_end(list)){
         current = rlist_next(list);
         rnode_free(current->data);
         free(current);
         RWZR_MALLOCS -= 1;
+        RWZR_NODES -= 1;
     }
+    list->cursor = NULL;
     list->nodes = NULL;
 }
 
@@ -209,6 +217,7 @@ void*
 rnode_text(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = RWZR_TYPE_STRING;
     value->data.str = s;
     return value;
@@ -217,6 +226,7 @@ void*
 rnode_num(long int x){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = RWZR_TYPE_NUMBER;
     value->data.num = x;
     return value;
@@ -226,6 +236,7 @@ void*
 rnode_list(rwzr_list list){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = RWZR_TYPE_LIST;
     value->data.list = list;
     return value;
@@ -235,6 +246,7 @@ void*
 rnode_sym(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = RWZR_TYPE_SYMBOL;
     value->data.str = s;
     return value;
@@ -244,6 +256,7 @@ void*
 rnode_func(rwzr_list params, rwzr_list body){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = RWZR_TYPE_FUNCTION;
     value->data.func = (rwzr_function)malloc(sizeof(rwzr_function_t));
     value->data.func->params = params;
@@ -255,6 +268,7 @@ void*
 rnode_copy(rwzr_value val){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
+    RWZR_VALUES++;
     value->type = val->type;
     value->data = val->data;
     return value;
@@ -269,10 +283,12 @@ rnode_free(rwzr_value data){
         /** DON'T FREE STRINGS AS THEY'RE NOT CLONED DURING STAGES **/
     }
     RWZR_MALLOCS -= 1;
+    RWZR_VALUES -= 1;
     free(data);
 }
 
 long int
 rnode_allocs(){
+	printf("nodes = %ld\nvalues = %ld\n", RWZR_NODES, RWZR_VALUES);
     return RWZR_MALLOCS;
 }
