@@ -107,9 +107,9 @@ rlist_delete(rwzr_list list, size_t index){
     if(index == 0){
         tmp = current;
         list->nodes = current->next;
-        free(tmp->data);
+        rnode_free(tmp->data);
         free(tmp);
-        RWZR_MALLOCS -= 2;
+        RWZR_MALLOCS -= 1;
         return;
     }
     while((counter < index - 1) && (current != NULL)){
@@ -118,9 +118,9 @@ rlist_delete(rwzr_list list, size_t index){
     }
     if((current != NULL) && (current->next != NULL)){
         tmp = current->next->next;
-        free(current->next->data);
+        rnode_free(current->next->data);
         free(current->next);
-        RWZR_MALLOCS -= 2;
+        RWZR_MALLOCS -= 1;
         current->next = tmp;
     }
 }
@@ -158,7 +158,7 @@ rlist_empty(rwzr_list list){
         current = rlist_next(list);
         rnode_free(current->data);
         free(current);
-        RWZR_MALLOCS -= 2;
+        RWZR_MALLOCS -= 1;
     }
     list->nodes = NULL;
 }
@@ -170,7 +170,7 @@ rlist_slice(rwzr_list list, size_t start, size_t end){
     size_t counter = start;
     head = rlist_get_node(list, start);
     while((head != NULL) && ((end == 0) || (counter < end))){
-        rlist_push(result, head->data);
+        rlist_push(result, rnode_copy(head->data));
         head = head->next;
         counter++;
     }
@@ -268,6 +268,7 @@ rnode_free(rwzr_value data){
             break;
         /** DON'T FREE STRINGS AS THEY'RE NOT CLONED DURING STAGES **/
     }
+    RWZR_MALLOCS -= 1;
     free(data);
 }
 

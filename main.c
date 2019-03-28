@@ -8,10 +8,12 @@
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
+#define RWZR_EXEC_KEEP_AST 0x1
+
 rwzr_value pairlist_get(rwzr_list list, char* key);
 void       pairlist_set(rwzr_list list, char* key, rwzr_value value);
 char*      Substring(char* text, size_t start, size_t end);
-rwzr_value exec(rwzr_value ast, rwzr_list ctx);
+rwzr_value exec(rwzr_value ast, rwzr_list ctx, int flags);
 rwzr_list  rwzr_lexer(char *code);
 rwzr_list  rwzr_parser(rwzr_list tokens);
 rwzr_value func_call(rwzr_list arguments, rwzr_list ctx);
@@ -27,7 +29,7 @@ pairlist_get(rwzr_list list, char* key){
     if(retval != NULL){
         result = (rwzr_value)(retval->next->data);
         free(keynode);
-        return result;
+        return (rwzr_value)rnode_copy(result);
     }
     free(keynode);
     parent_key = (rwzr_value)rnode_sym("__parent");
@@ -190,77 +192,75 @@ func_call(rwzr_list arguments, rwzr_list ctx){
         tmp = rlist_next_value(func->params);
         tmp->type = RWZR_TYPE_SYMBOL;
         rlist_push(new_scope, tmp);
-        rlist_push(new_scope, exec(rlist_next_value(arguments), ctx));
+        rlist_push(new_scope, exec(rlist_next_value(arguments), ctx, 0));
     }
-    result = exec(rnode_list(func->body), new_scope);
+    result = exec(rnode_list(func->body), new_scope, RWZR_EXEC_KEEP_AST);
     rlist_empty(new_scope);
     return result;
 }
 
 rwzr_value
-exec(rwzr_value ast, rwzr_list ctx){
+exec(rwzr_value ast, rwzr_list ctx, int flags){
     char* operator;
-    rwzr_list ops;
-    rwzr_node temp_node;
-    rwzr_value a, b, cond, retval; // <- must rnode_free them or invent better approach to temp vars
+    rwzr_list ops = NULL;
+    rwzr_node temp_node = NULL;
+    rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
         return (rwzr_value)rnode_copy(ast);
     }
     ops = ast->data.list;
-    operator = exec(rlist_get(ops, 0), ctx)->data.str;
+    operator = exec(rlist_get(ops, 0), ctx, 0)->data.str;
+    printf("operator: %s\n", operator);
     SWITCH_OPERATOR("int")
-        a = exec(rlist_get(ops, 1), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("int: nullptr exception");
-            return NULL;
         } else if(a->type != RWZR_TYPE_STRING){
             puts("int: wrong operands type");
             return NULL;
-        }
-        return rnode_num(strtol(a->data.str, NULL, 10));
+        } else {
+			result = rnode_num(strtol(a->data.str, NULL, 10));
+		}
 
     CASE_OPERATOR("do")
-        retval = NULL;
         temp_node = ops->nodes->next;
         while(temp_node != NULL){
-            if(retval != NULL) free(retval);
-            retval = exec((rwzr_value)(temp_node->data), ctx);
+            result = exec((rwzr_value)(temp_node->data), ctx, 0);
             temp_node = temp_node->next;
         }
-        return retval;
 
     CASE_OPERATOR("quote")
-        return rnode_list(rlist_slice(ops, 1, 0));
+        result = rnode_list(rlist_slice(ops, 1, 0));
 
     CASE_OPERATOR("set")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if((a == NULL) || (b == NULL)){
             puts("set: nullptr exception");
             return NULL;
         } else if(a->type != RWZR_TYPE_STRING){
             puts("set: wrong operands type");
             return NULL;
-        }
-        pairlist_set(ctx, a->data.str, b);
-        return b;
+        } else {
+			pairlist_set(ctx, a->data.str, b);
+			result = rnode_copy(b);
+		}
 
     CASE_OPERATOR("get")
-        a = exec(rlist_get(ops, 1), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("get: nullptr exception");
             return NULL;
         } else if(a->type != RWZR_TYPE_STRING){
             puts("get: wrong operands type");
-            return NULL;
-        }
-        return pairlist_get(ctx, a->data.str);
+        } else {
+			result = pairlist_get(ctx, a->data.str);
+		}
 
     CASE_OPERATOR("print")
-        a = exec(rlist_get(ops, 1), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("print: nullptr exception");
-            return NULL;
         } else if(a->type == RWZR_TYPE_STRING){
             printf("%s\n", a->data.str);
         } else if(a->type == RWZR_TYPE_NUMBER){
@@ -271,157 +271,151 @@ exec(rwzr_value ast, rwzr_list ctx){
         } else {
             printf("print: wrong operand type %d\n", a->type);
         }
-        return NULL;
 
     CASE_OPERATOR("add")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num + b->data.num);
+            printf("%d ~ %d\n", a->type, b->type);
+        } else {
+			result = rnode_num(a->data.num + b->data.num);
+		}
 
     CASE_OPERATOR("sub")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num - b->data.num);
+        } else {
+			return rnode_num(a->data.num - b->data.num);
+		}
 
     CASE_OPERATOR("mul")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num * b->data.num);
+        } else {
+			result = rnode_num(a->data.num * b->data.num);
+		}
 
     CASE_OPERATOR("div")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num / b->data.num);
+        } else {
+			result = rnode_num(a->data.num / b->data.num);
+		}
 
     CASE_OPERATOR("mod")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num % b->data.num);
+        } else {
+			result = rnode_num(a->data.num % b->data.num);
+		}
 
     CASE_OPERATOR("lt")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("lt: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("lt: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num < b->data.num);
+        } else {
+			result = rnode_num(a->data.num < b->data.num);
+		}
 
     CASE_OPERATOR("gt")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("gt: nullptr exception");
-            return NULL;
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("gt: wrong operands type");
-            return NULL;
-        }
-        return rnode_num(a->data.num > b->data.num);
+        } else {
+			result = rnode_num(a->data.num > b->data.num);
+		}
 
     CASE_OPERATOR("eq")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("eq: nullptr exception");
-            return NULL;
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
-			return rnode_num(a->data.num == b->data.num);
+			result = rnode_num(a->data.num == b->data.num);
 		} else if((a->type == RWZR_TYPE_STRING) && (b->type == RWZR_TYPE_STRING)){
-			return rnode_num(strcmp(a->data.str, b->data.str) == 0);
+			result = rnode_num(strcmp(a->data.str, b->data.str) == 0);
 		} else {
             puts("eq: wrong operands type");
-            return NULL;
         }
         
     CASE_OPERATOR("ne")
-        a = exec(rlist_get(ops, 1), ctx);
-        b = exec(rlist_get(ops, 2), ctx);
+        a = exec(rlist_get(ops, 1), ctx, 0);
+        b = exec(rlist_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("ne: nullptr exception");
-            return NULL;
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
-			return rnode_num(a->data.num != b->data.num);
+			result = rnode_num(a->data.num != b->data.num);
 		} else if((a->type == RWZR_TYPE_STRING) && (b->type == RWZR_TYPE_STRING)){
-			return rnode_num(strcmp(a->data.str, b->data.str) != 0);
+			result = rnode_num(strcmp(a->data.str, b->data.str) != 0);
         } else {
             puts("ne: wrong operands type");
-            return NULL;
         }
 
     CASE_OPERATOR("while")
         a = rlist_get(ops, 1);
         b = rlist_get(ops, 2);
         if((a == NULL) || (b == NULL)){
-			puts("while: nullptr exception"); return NULL;
+			puts("while: nullptr exception");
+		} else {
+			cond = exec(a, ctx, RWZR_EXEC_KEEP_AST);
+			if(cond == NULL){
+				puts("while: nullptr exception");
+			} else if(cond->type != RWZR_TYPE_NUMBER){
+				puts("while: type missmatch");
+			} else {
+				while(cond->data.num != 0){
+					result = exec(b, ctx, RWZR_EXEC_KEEP_AST);
+					cond = exec(a, ctx, RWZR_EXEC_KEEP_AST); // check condition here
+				}
+			}
 		}
-        cond = exec(a, ctx);
-        if(cond == NULL){
-			puts("while: nullptr exception"); return NULL;
-		}
-		if(cond->type != RWZR_TYPE_NUMBER){
-			puts("while: type missmatch"); return NULL;
-		}
-        while(cond->data.num != 0){
-            retval = exec(b, ctx);
-            cond = exec(a, ctx);
-        }
-        return retval;
 
     CASE_OPERATOR("func")
         a = rlist_get(ops, 1);
         b = rlist_get(ops, 2);
-        return rnode_func(
+        result = rnode_func(
             rlist_slice(a->data.list, 0, 0),
             rlist_slice(b->data.list, 0, 0)
         );
 
     CASE_OPERATOR("call")
-        return func_call(rlist_slice(ops, 1, 0), ctx);
+        result = func_call(rlist_slice(ops, 1, 0), ctx);
 
     CASE_DEFAULT
         printf("Unknown operator: %s\n", operator);
 
     CASE_END
-    return NULL;
+    if(a != NULL) rnode_free(a);
+    if(b != NULL) rnode_free(b);
+    if(cond != NULL) rnode_free(cond);
+    if(!(flags|RWZR_EXEC_KEEP_AST))
+		rlist_empty(ops);
+    return result;
 }
 
 
@@ -439,7 +433,7 @@ int main(){
     rlist_empty(head);
     rlist_print(second);
     puts("\nInterpreter output:");
-    exec(rnode_list(second), global_context);
+    exec(rnode_list(second), global_context, 0);
     rlist_empty(second);
     printf("= %ld\n", rnode_allocs());
     return 0;
