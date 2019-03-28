@@ -143,6 +143,13 @@ rnode_copy(rwzr_value v){
     case RWZR_TYPE_LIST:
         value->data.list = vector_slice(v->data.list, 0, 0);
         break;
+    case RWZR_TYPE_NUMBER:
+        value->data.num = v->data.num;
+        break;
+    case RWZR_TYPE_STRING:
+    case RWZR_TYPE_SYMBOL:
+        value->data.str = v->data.str;
+        break;
     default:
         value->data = v->data;
     }
@@ -169,5 +176,21 @@ rnode_free(rwzr_value r){
         vector_free(r->data.list);
         free(r->data.list);
     }
-    //free(r);
+    free(r);
+}
+
+void rnode_print(rwzr_value r){
+    if(r->type == RWZR_TYPE_STRING){
+        printf("\"%s\"\n", r->data.str);
+    } else if(r->type == RWZR_TYPE_LIST) {
+        vector_print(r->data.list);
+    } else if(r->type == RWZR_TYPE_SYMBOL) {
+        printf("%s\n", r->data.str);
+    } else if(r->type == RWZR_TYPE_NUMBER) {
+        printf("%ld\n", r->data.num);
+    } else if(r->type == RWZR_TYPE_FUNCTION){
+        printf("<function>\n");
+    } else {
+        printf("<unknown type %d>\n", r->type);
+    }
 }

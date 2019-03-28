@@ -25,16 +25,20 @@ vector  global_context;
 rwzr_value
 pairlist_get(vector v, char* key){
     int i;
+    printf("key: %s\n", key);
+    vector_print(v);
+    puts("context");
     for(i = 0; i < v->size; i++){
         if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, v->data[i]->data.str) == 0)){
             return rnode_copy(v->data[i + 1]);
         }
     }
+    puts("lookup in parent");
     for(i = 0; i < v->size; i++){
         if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, "__parent") == 0)){
             return pairlist_get(v->data[i + 1]->data.list, key);
         }
-    }
+    }   
     return NULL;
 }
 
@@ -201,11 +205,15 @@ exec(rwzr_value ast, vector ctx, int flags){
     vector ops = NULL;
     rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
-        return ast;
+        result = rnode_copy(ast);
+        rnode_print(ast);
+        return result;
     }
     ops = ast->data.list;
     operator = exec(vector_get(ops, 0), ctx, 0)->data.str;
     printf("operator: %s\n", operator);
+    vector_print(ops);
+    puts("");
     SWITCH_OPERATOR("int")
         a = exec(vector_get(ops, 1), ctx, 0);
         if(a == NULL){
