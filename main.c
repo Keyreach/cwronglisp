@@ -363,32 +363,48 @@ exec(rwzr_value ast, rwzr_list ctx){
         if(a == NULL){
             puts("eq: nullptr exception");
             return NULL;
-        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
+        } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
+			return rnode_num(a->data.num == b->data.num);
+		} else if((a->type == RWZR_TYPE_STRING) && (b->type == RWZR_TYPE_STRING)){
+			return rnode_num(strcmp(a->data.str, b->data.str) == 0);
+		} else {
             puts("eq: wrong operands type");
             return NULL;
         }
-        return rnode_num(a->data.num == b->data.num);
-
+        
     CASE_OPERATOR("ne")
         a = exec(rlist_get(ops, 1), ctx);
         b = exec(rlist_get(ops, 2), ctx);
         if(a == NULL){
             puts("ne: nullptr exception");
             return NULL;
-        } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
+        } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
+			return rnode_num(a->data.num != b->data.num);
+		} else if((a->type == RWZR_TYPE_STRING) && (b->type == RWZR_TYPE_STRING)){
+			return rnode_num(strcmp(a->data.str, b->data.str) != 0);
+        } else {
             puts("ne: wrong operands type");
             return NULL;
         }
-        return rnode_num(a->data.num != b->data.num);
 
     CASE_OPERATOR("while")
         a = rlist_get(ops, 1);
         b = rlist_get(ops, 2);
+        if((a == NULL) || (b == NULL)){
+			puts("while: nullptr exception"); return NULL;
+		}
         cond = exec(a, ctx);
-        while((cond != NULL) && (cond->type == RWZR_TYPE_NUMBER) && (cond->data.num != 0)){
-            exec(b, ctx);
+        if(cond == NULL){
+			puts("while: nullptr exception"); return NULL;
+		}
+		if(cond->type != RWZR_TYPE_NUMBER){
+			puts("while: type missmatch"); return NULL;
+		}
+        while(cond->data.num != 0){
+            retval = exec(b, ctx);
             cond = exec(a, ctx);
         }
+        return retval;
 
     CASE_OPERATOR("func")
         a = rlist_get(ops, 1);
