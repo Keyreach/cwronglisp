@@ -1,4 +1,4 @@
 all: main.exe
 
-main.exe: astlist.c main.c
-	gcc -o main.exe astlist.c main.c
+main.exe: vector.c vector.h main.c
+	gcc -o main.exe vector.c main.c

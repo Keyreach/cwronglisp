@@ -213,7 +213,7 @@ rlist_find_node(rwzr_list haystack, rwzr_value needle){
     return NULL;
 }
 
-void*
+rwzr_value
 rnode_text(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
@@ -222,7 +222,7 @@ rnode_text(char* s){
     value->data.str = s;
     return value;
 }
-void*
+rwzr_value
 rnode_num(long int x){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
@@ -232,7 +232,7 @@ rnode_num(long int x){
     return value;
 }
 
-void*
+rwzr_value
 rnode_list(rwzr_list list){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
@@ -242,7 +242,7 @@ rnode_list(rwzr_list list){
     return value;
 }
 
-void*
+rwzr_value
 rnode_sym(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
@@ -252,7 +252,7 @@ rnode_sym(char* s){
     return value;
 }
 
-void*
+rwzr_value
 rnode_func(rwzr_list params, rwzr_list body){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;
@@ -264,7 +264,7 @@ rnode_func(rwzr_list params, rwzr_list body){
     return value;
 }
 
-void*
+rwzr_value
 rnode_copy(rwzr_value val){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t));
     RWZR_MALLOCS++;

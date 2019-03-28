@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "astlist.h"
+#include "vector.h"
 
 #define SWITCH_OPERATOR(x) if(strcmp(operator, x) == 0){
 #define CASE_OPERATOR(x) } else if(strcmp(operator, x) == 0) {
@@ -10,52 +10,46 @@
 
 #define RWZR_EXEC_KEEP_AST 0x1
 
-rwzr_value pairlist_get(rwzr_list list, char* key);
-void       pairlist_set(rwzr_list list, char* key, rwzr_value value);
+rwzr_value pairlist_get(vector list, char* key);
+void       pairlist_set(vector list, char* key, rwzr_value value);
 char*      Substring(char* text, size_t start, size_t end);
-rwzr_value exec(rwzr_value ast, rwzr_list ctx, int flags);
-rwzr_list  rwzr_lexer(char *code);
-rwzr_list  rwzr_parser(rwzr_list tokens);
-rwzr_value func_call(rwzr_list arguments, rwzr_list ctx);
+rwzr_value exec(rwzr_value ast, vector ctx, int flags);
+vector      rwzr_lexer(char *code);
+vector      rwzr_parser(vector tokens);
+rwzr_value  func_call(vector arguments, vector ctx);
 
-rwzr_list  global_context;
+vector  global_context;
 
 /** key-value helpers **/
 
 rwzr_value
-pairlist_get(rwzr_list list, char* key){
-    rwzr_value result, parent_key, keynode = (rwzr_value)rnode_sym(key);
-    rwzr_node parent, retval = rlist_find_node(list, keynode);
-    if(retval != NULL){
-        result = (rwzr_value)(retval->next->data);
-        rnode_free(keynode);
-        return (rwzr_value)rnode_copy(result);
+pairlist_get(vector v, char* key){
+    int i;
+    for(i = 0; i < v->size; i++){
+        if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, v->data[i]->data.str) == 0)){
+            return rnode_copy(v->data[i + 1]);
+        }
     }
-    rnode_free(keynode);
-    parent_key = (rwzr_value)rnode_sym("__parent");
-    parent = rlist_find_node(list, parent_key);
-    rnode_free(parent_key);
-    if(parent == NULL){
-        return NULL;
+    for(i = 0; i < v->size; i++){
+        if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, "__parent") == 0)){
+            return pairlist_get(v->data[i + 1]->data.list, key);
+        }
     }
-    return pairlist_get(
-        ((rwzr_value)(parent->next->data))->data.list, key
-    );
+    return NULL;
 }
 
 void
-pairlist_set(rwzr_list list, char* key, rwzr_value value){
-    rwzr_value keynode = (rwzr_value)rnode_sym(key);
-    rwzr_node retval = rlist_find_node(list, keynode);
-    if(retval == NULL){
-        rlist_push(list, (void*)keynode);
-        rlist_push(list, (void*)rnode_copy(value));
-    } else {
-        // add replace to astlist.c
-        free(keynode);
-        free(retval->next->data);
-        retval->next->data = (void*)rnode_copy(value);
+pairlist_set(vector v, char* key, rwzr_value value){
+    int i;
+    for(i = 0; i < v->size; i++){
+        if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, v->data[i]->data.str) == 0)){
+            rnode_free(v->data[i + 1]);
+            v->data[i + 1] = rnode_copy(value);
+            return;
+        }
     }
+    vector_add(v, rnode_sym(key));
+    vector_add(v, rnode_copy(value));
 }
 
 /** **/
@@ -69,9 +63,9 @@ Substring(char* text, size_t start, size_t end){
     return s;
 }
 
-rwzr_list
+vector
 rwzr_lexer(char *code){
-    rwzr_list tokens = rlist_create();
+    vector tokens = vector_new(1);
     size_t tokenStart = -1;
     char c, quoted = 0;
     size_t i, n = strlen(code);
@@ -79,7 +73,7 @@ rwzr_lexer(char *code){
         c = code[i];
         if(quoted){
             if(c == '"'){
-                rlist_push(
+                vector_add(
                     tokens,
                     rnode_text(Substring(code, tokenStart, i))
                 );
@@ -91,25 +85,25 @@ rwzr_lexer(char *code){
                 case '(':
                 case ')':
                     if(tokenStart != -1){
-                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
+                        vector_add(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
-                    rlist_push(tokens, rnode_text(c == '(' ? "(" : ")"));
+                    vector_add(tokens, rnode_text(c == '(' ? "(" : ")"));
                     break;
                 case '{':
                 case '}':
                     if(tokenStart != -1){
-                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
+                        vector_add(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
-                    rlist_push(tokens, rnode_text(c == '{' ? "(" : ")"));
+                    vector_add(tokens, rnode_text(c == '{' ? "(" : ")"));
                     if(c == '{'){
-                        rlist_push(tokens, rnode_text("quote"));
+                        vector_add(tokens, rnode_text("quote"));
                     }
                     break;
                 case '"':
                     if(tokenStart != -1){
-                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
+                        vector_add(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
                     tokenStart = i + 1;
@@ -120,7 +114,7 @@ rwzr_lexer(char *code){
                 case '\r':
                 case '\t':
                     if(tokenStart != -1){
-                        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
+                        vector_add(tokens, rnode_text(Substring(code, tokenStart, i)));
                         tokenStart = -1;
                     }
                     break;
@@ -132,88 +126,88 @@ rwzr_lexer(char *code){
         }
     }
     if(tokenStart != -1){
-        rlist_push(tokens, rnode_text(Substring(code, tokenStart, i)));
+        vector_add(tokens, rnode_text(Substring(code, tokenStart, i)));
         tokenStart = -1;
     }
     return tokens;
 }
 
-rwzr_list
-rwzr_parser(rwzr_list tokens){
-    rwzr_list tree = rlist_create();
-    rwzr_list branch = rlist_create();
+vector
+rwzr_parser(vector tokens){
+    vector tree = vector_new(1);
+    struct vector branch;
+    vector_init(&branch, 1);
     char *token;
     size_t brackets = 0;
-    size_t i, n = rlist_len(tokens);
+    size_t i, n = tokens->size;
     for(i = 0; i < n; i++){
-        token = rlist_get(tokens, i)->data.str;
+        token = vector_get(tokens, i)->data.str;
         if(strcmp(token, "(") == 0){
             if(brackets > 0){
-                rlist_push(branch, rnode_text(token));
+                vector_add(&branch, rnode_text(token));
             }
             brackets++;
         } else if(strcmp(token, ")") == 0) {
             brackets--;
             if(brackets > 0){
-                rlist_push(branch, rnode_text(token));
+                vector_add(&branch, rnode_text(token));
             } else {
-                rlist_push(tree, rnode_list(rwzr_parser(branch)));
-                rlist_empty(branch);
+                vector_add(tree, rnode_list(rwzr_parser(&branch)));
             }
         } else {
             if(brackets > 0){
-                rlist_push(branch, rnode_text(token));
+                vector_add(&branch, rnode_text(token));
             } else {
-                rlist_push(tree, rnode_text(token));
+                vector_add(tree, rnode_text(token));
             }
         }
     }
+    vector_free(tokens);
     return tree;
 }
 
 rwzr_value
-func_call(rwzr_list arguments, rwzr_list ctx){
-    rlist_rewind(arguments);
-    rwzr_value result, tmp, func_name = rlist_next_value(arguments);
+func_call(vector arguments, vector ctx){
+    int i;
+    rwzr_value result, tmp, func_name = vector_get(arguments, 0);
     if((func_name == NULL) || (func_name->type != RWZR_TYPE_STRING)){
         puts("call: invalid identifier");
         return NULL;
     }
     rwzr_value func_data = pairlist_get(ctx, func_name->data.str);
-    if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION)){
+    if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION) || (func_data->data.func == NULL) || (func_data->data.func->body == NULL) || (func_data->data.func->params == NULL)){
         puts("call: no function");
         return NULL;
     }
     rwzr_function func = func_data->data.func;
-    rlist_rewind(func->params);
-    rwzr_list new_scope = rlist_create();
-    rlist_push(new_scope, rnode_sym("__parent"));
-    rlist_push(new_scope, rnode_list(ctx));
-    while(!rlist_end(arguments)){
-        tmp = rlist_next_value(func->params);
+    struct vector new_scope;
+    vector_init(&new_scope, 1);
+    vector_add(&new_scope, rnode_sym("__parent"));
+    vector_add(&new_scope, rnode_list(ctx));
+    for(i = 0; i < arguments->size - 1; i++){
+        tmp = vector_get(func->params, i);
         tmp->type = RWZR_TYPE_SYMBOL;
-        rlist_push(new_scope, tmp);
-        rlist_push(new_scope, exec(rlist_next_value(arguments), ctx, 0));
+        vector_add(&new_scope, tmp);
+        vector_add(&new_scope, exec(vector_get(arguments, i + 1), ctx, 0));
     }
-    result = exec(rnode_list(func->body), new_scope, RWZR_EXEC_KEEP_AST);
-    rlist_empty(new_scope);
+    result = exec(rnode_list(func->body), &new_scope, RWZR_EXEC_KEEP_AST);
     return result;
 }
 
 rwzr_value
-exec(rwzr_value ast, rwzr_list ctx, int flags){
+exec(rwzr_value ast, vector ctx, int flags){
+    int i;
     char* operator;
-    rwzr_list ops = NULL;
-    rwzr_node temp_node = NULL;
+    vector ops = NULL;
     rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
-        return (rwzr_value)rnode_copy(ast);
+        return ast;
     }
     ops = ast->data.list;
-    operator = exec(rlist_get(ops, 0), ctx, 0)->data.str;
+    operator = exec(vector_get(ops, 0), ctx, 0)->data.str;
     printf("operator: %s\n", operator);
     SWITCH_OPERATOR("int")
-        a = exec(rlist_get(ops, 1), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("int: nullptr exception");
         } else if(a->type != RWZR_TYPE_STRING){
@@ -224,34 +218,29 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("do")
-        temp_node = ops->nodes->next;
-        while(temp_node != NULL){
-            result = exec((rwzr_value)(temp_node->data), ctx, 0);
-            temp_node = temp_node->next;
+        for(i = 1; i < ops->size; i++){
+            result = exec(ops->data[i], ctx, 0);
         }
 
     CASE_OPERATOR("quote")
-        result = rnode_list(rlist_slice(ops, 1, 0));
+        result = rnode_list(vector_slice(ops, 1, 0));
 
     CASE_OPERATOR("set")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if((a == NULL) || (b == NULL)){
             puts("set: nullptr exception");
-            return NULL;
         } else if(a->type != RWZR_TYPE_STRING){
             puts("set: wrong operands type");
-            return NULL;
         } else {
 			pairlist_set(ctx, a->data.str, b);
 			result = rnode_copy(b);
 		}
 
     CASE_OPERATOR("get")
-        a = exec(rlist_get(ops, 1), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("get: nullptr exception");
-            return NULL;
         } else if(a->type != RWZR_TYPE_STRING){
             puts("get: wrong operands type");
         } else {
@@ -259,7 +248,7 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("print")
-        a = exec(rlist_get(ops, 1), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
         if(a == NULL){
             puts("print: nullptr exception");
         } else if(a->type == RWZR_TYPE_STRING){
@@ -267,15 +256,15 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
         } else if(a->type == RWZR_TYPE_NUMBER){
             printf("%ld\n", a->data.num);
         } else if(a->type == RWZR_TYPE_LIST){
-            rlist_print(a->data.list);
+            vector_print(a->data.list);
             printf("\n");
         } else {
             printf("print: wrong operand type %d\n", a->type);
         }
 
     CASE_OPERATOR("add")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -286,8 +275,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("sub")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -297,8 +286,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("mul")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -308,8 +297,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("div")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -319,8 +308,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("mod")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -330,8 +319,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("lt")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("lt: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -341,8 +330,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("gt")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("gt: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -352,8 +341,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("eq")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("eq: nullptr exception");
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
@@ -365,8 +354,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
         }
         
     CASE_OPERATOR("ne")
-        a = exec(rlist_get(ops, 1), ctx, 0);
-        b = exec(rlist_get(ops, 2), ctx, 0);
+        a = exec(vector_get(ops, 1), ctx, 0);
+        b = exec(vector_get(ops, 2), ctx, 0);
         if(a == NULL){
             puts("ne: nullptr exception");
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
@@ -378,8 +367,8 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
         }
 
     CASE_OPERATOR("while")
-        a = rlist_get(ops, 1);
-        b = rlist_get(ops, 2);
+        a = vector_get(ops, 1);
+        b = vector_get(ops, 2);
         if((a == NULL) || (b == NULL)){
 			puts("while: nullptr exception");
 		} else {
@@ -397,15 +386,17 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
 		}
 
     CASE_OPERATOR("func")
-        a = rlist_get(ops, 1);
-        b = rlist_get(ops, 2);
+        a = vector_get(ops, 1);
+        b = vector_get(ops, 2);
+        vector_print(a->data.list);
+        vector_print(b->data.list);
         result = rnode_func(
-            rlist_slice(a->data.list, 0, 0),
-            rlist_slice(b->data.list, 0, 0)
+            vector_slice(a->data.list, 0, 0),
+            vector_slice(b->data.list, 0, 0)
         );
 
     CASE_OPERATOR("call")
-        result = func_call(rlist_slice(ops, 1, 0), ctx);
+        result = func_call(vector_slice(ops, 1, 0), ctx);
 
     CASE_DEFAULT
         printf("Unknown operator: %s\n", operator);
@@ -415,28 +406,28 @@ exec(rwzr_value ast, rwzr_list ctx, int flags){
     if(b != NULL) rnode_free(b);
     if(cond != NULL) rnode_free(cond);
     if(!(flags|RWZR_EXEC_KEEP_AST))
-		rlist_empty(ops);
+		rnode_free(ast);
     return result;
 }
 
-
 int main(){
-    rwzr_list head, second;
-    global_context = rlist_create();
+    vector tokens, syntax_tree;
+    global_context = vector_new(1);
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
     puts(buffer);
-    head = rwzr_lexer(buffer);
+    tokens = rwzr_lexer(buffer);
     puts("Lexer output:");
-    rlist_print(head);
+    vector_print(tokens);
     puts("\nParser output:");
-    second = rwzr_parser(head);
-    rlist_empty(head);
-    rlist_print(second);
+    syntax_tree = rwzr_parser(tokens);
+    vector_print(syntax_tree);
+    free(tokens);
     puts("\nInterpreter output:");
-    exec(rnode_list(second), global_context, 0);
-    rlist_empty(second);
-    rlist_empty(global_context);
-    printf("= %ld\n", rnode_allocs());
+    exec(rnode_list(syntax_tree), global_context, 0);
+    /* vector_free(syntax_tree);
+    if(syntax_tree != NULL) free(syntax_tree); */
+    vector_free(global_context);
+    if(global_context != NULL) free(global_context);
     return 0;
 }
