@@ -66,7 +66,7 @@ vector_each(vector v, void(*f)(TYPE, int)){
 }
 
 void
-vector_print(vector v){
+vector_print_i(vector v){
     int i;
     TYPE cdata;
     CNAD(v, "vector print: null pointer")
@@ -76,7 +76,7 @@ vector_print(vector v){
         if(cdata->type == RWZR_TYPE_STRING){
             printf("\"%s\"%s ", cdata->data.str, i == v->size - 1 ? "" : ",");
         } else if(cdata->type == RWZR_TYPE_LIST) {
-            vector_print(cdata->data.list);
+            vector_print_i(cdata->data.list);
             printf(i == v->size - 1 ? " " : ", ");
         } else if(cdata->type == RWZR_TYPE_SYMBOL) {
             printf("\"%s\"%s ", cdata->data.str, i == v->size - 1 ? "" : ",");
@@ -89,6 +89,32 @@ vector_print(vector v){
         }
     }
     printf("] ");
+}
+
+void
+vector_print(vector v){
+    int i;
+    TYPE cdata;
+    CNAD(v, "vector print: null pointer")
+    printf("[ ");
+    for(i = 0; i < v->size; i++){
+        cdata = v->data[i];
+        if(cdata->type == RWZR_TYPE_STRING){
+            printf("\"%s\"%s ", cdata->data.str, i == v->size - 1 ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_LIST) {
+            vector_print_i(cdata->data.list);
+            printf(i == v->size - 1 ? " " : ", ");
+        } else if(cdata->type == RWZR_TYPE_SYMBOL) {
+            printf("\"%s\"%s ", cdata->data.str, i == v->size - 1 ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_NUMBER) {
+            printf("\"%ld\"%s ", cdata->data.num, i == v->size - 1 ? "" : ",");
+        } else if(cdata->type == RWZR_TYPE_FUNCTION){
+            printf("<function>%s ", i == v->size - 1 ? "" : ",");
+        } else {
+            printf("<unknown type %d>%s ", cdata->type, i == v->size - 1 ? "" : ",");
+        }
+    }
+    printf("] \n");
 }
 
 void

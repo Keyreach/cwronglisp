@@ -446,6 +446,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 int main(){
     vector tokens = NULL;
     vector syntax_tree = NULL;
+    rwzr_value ast;
     global_context = vector_new(1);
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
@@ -457,11 +458,11 @@ int main(){
     syntax_tree = rwzr_parser(tokens);
     vector_print(syntax_tree);
     vector_destroy(tokens);
-
     puts("\nInterpreter output:");
-    exec(rnode_list(syntax_tree), global_context, 0);
+    ast = rnode_list(syntax_tree);
+    exec(ast, global_context, 0);
 	puts("Cleaning up: AST");
-    vector_destroy(syntax_tree);
+    rnode_free(ast);
     puts("Cleaning up: Context");
     vector_destroy(global_context);
     print_allocations();
