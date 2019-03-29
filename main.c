@@ -25,13 +25,16 @@ vector  global_context;
 rwzr_value
 pairlist_get(vector v, char* key){
     int i;
+    //puts("lookup");
+    //vector_print(v);
     for(i = 0; i < v->size; i++){
         if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, v->data[i]->data.str) == 0)){
             return rnode_copy(v->data[i + 1]);
         }
     }
+    //puts("lookup in upper");
     for(i = 0; i < v->size; i++){
-        if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, "__parent") == 0)){
+        if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(v->data[i]->data.str, "__parent") == 0)){
             return pairlist_get(v->data[i + 1]->data.list, key);
         }
     }   
@@ -138,8 +141,8 @@ rwzr_parser(vector tokens){
     rwzr_value token;
     output = vector_new(1);
     branch = vector_new(1);
-    vector_print(tokens);
-	puts("<- got tokens");
+    //vector_print(tokens);
+	//puts("<- got tokens");
     size_t brackets = 0;
     size_t i, n = tokens->size;
     for(i = 0; i < n; i++){
@@ -157,13 +160,13 @@ rwzr_parser(vector tokens){
                 vector_add(branch, token);
             } else {
 				rnode_free(token);
-				vector_print(branch);
-				puts("<- branch");
+				//vector_print(branch);
+				//puts("<- branch");
 				result = rwzr_parser(branch);
-				vector_print(result);
-				printf("<- result for -> ");
-				vector_print(branch);
-				puts("");
+				//vector_print(result);
+				//printf("<- result for -> ");
+				//vector_print(branch);
+				//puts("");
                 vector_add(output, rnode_list(result));
                 vector_free(branch);
             }
@@ -176,8 +179,8 @@ rwzr_parser(vector tokens){
         }
     }
     vector_destroy(branch);
-    vector_print(output);
-    puts(" <- tree");
+    //vector_print(output);
+    //puts(" <- tree");
     return output;
 }
 
@@ -187,15 +190,26 @@ func_call(vector arguments, vector ctx){
     rwzr_value result = NULL, tmp = NULL, func_name = vector_get(arguments, 0);
     if((func_name == NULL) || (func_name->type != RWZR_TYPE_STRING)){
         puts("call: invalid identifier");
+        rnode_free(func_name);
         return NULL;
     }
     rwzr_value func_data = pairlist_get(ctx, func_name->data.str);
     if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION) || (func_data->data.func == NULL) || (func_data->data.func->body == NULL) || (func_data->data.func->params == NULL)){
         puts("call: no function");
+        vector_destroy(arguments);
+        rnode_free(func_data);
+        rnode_free(func_name);
         return NULL;
     }
     rwzr_function func = func_data->data.func;
     struct vector new_scope;
+    if(arguments->size - 1 > func->params->size){
+        puts("call: too much arguments");
+        vector_destroy(arguments);
+        rnode_free(func_data);
+        rnode_free(func_name);
+        return NULL;
+    }
     vector_init(&new_scope, 1);
     vector_add(&new_scope, rnode_sym("__parent"));
     vector_add(&new_scope, rnode_list(ctx));
@@ -208,14 +222,16 @@ func_call(vector arguments, vector ctx){
     tmp = rnode_list(func->body);
     result = exec(tmp, &new_scope, 0);
     for(i = 0; i < new_scope.size; i++){
-        printf("freeing scope %d/%d\n", i, new_scope.size);
-		if(strcmp(new_scope.data[i]->data.str, "__parent") == 0){
+        //printf("freeing scope %d/%d\n", i, new_scope.size);
+        //rnode_print(new_scope.data[i]);
+		if((new_scope.data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(new_scope.data[i]->data.str, "__parent") == 0)){
 			rnode_free(new_scope.data[i]);
 			i++;
             rnode_forget(new_scope.data[i]);
 		} else {
 			rnode_free(new_scope.data[i]);
 		}
+        //puts("deleted");
 	}
 	free(new_scope.data);
     rnode_forget(tmp);
@@ -230,7 +246,7 @@ exec(rwzr_value ast, vector ctx, int flags){
     int i;
     rwzr_value operator;
     vector ops = NULL;
-    rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
+    rwzr_value a = NULL, b = NULL, c = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
         result = rnode_copy(ast);
         return result;
@@ -288,7 +304,6 @@ exec(rwzr_value ast, vector ctx, int flags){
             printf("%ld\n", a->data.num);
         } else if(a->type == RWZR_TYPE_LIST){
             vector_print(a->data.list);
-            printf("\n");
         } else if(a->type == RWZR_TYPE_FUNCTION){
 			printf("<function>\n");
         } else {
@@ -302,7 +317,6 @@ exec(rwzr_value ast, vector ctx, int flags){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
-            printf("%d ~ %d\n", a->type, b->type);
         } else {
 			result = rnode_num(a->data.num + b->data.num);
 		}
@@ -420,6 +434,27 @@ exec(rwzr_value ast, vector ctx, int flags){
 			}
 		}
 
+    CASE_OPERATOR("if")
+        a = vector_get(ops, 1); //?
+        b = vector_get(ops, 2); //?
+        c = vector_get(ops, 3);
+        if((a == NULL) || (b == NULL)){
+			puts("while: nullptr exception");
+		} else {
+			cond = exec(a, ctx, 0);
+			if(cond == NULL){
+				puts("while: nullptr exception");
+			} else if(cond->type != RWZR_TYPE_NUMBER){
+				puts("while: type missmatch");
+			} else {
+				if(cond->data.num != 0){
+					result = exec(b, ctx, 0);
+				} else {
+                    result = exec(c, ctx, 0);
+                }
+			}
+		}
+
     CASE_OPERATOR("func")
         //a = vector_get(ops, 1);
         //b = vector_get(ops, 2);
@@ -436,23 +471,27 @@ exec(rwzr_value ast, vector ctx, int flags){
 
     CASE_END
     if(operator != NULL){
-		puts("free operator");
+		//puts("free operator");
 		rnode_free(operator);
 	}
     if(a != NULL){
-		puts("free a");
+		//puts("free a");
 		rnode_free(a);
 	}
     if(b != NULL){
-		puts("free b");
+		//puts("free b");
 		rnode_free(b);
 	}
+    if(c != NULL){
+		//puts("free b");
+		rnode_free(c);
+	}
     if(cond != NULL){
-		puts("free cond");
+		//puts("free cond");
 		rnode_free(cond);
 	}
     if(!(flags|RWZR_EXEC_KEEP_AST)){
-		puts("free ast");
+		//puts("free ast");
 		rnode_free(ast);
 	}
     return result;

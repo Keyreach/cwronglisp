@@ -1,6 +1,13 @@
 do
 	(set fna (func
-		(a b c d)
-		(print Done)
+		(a)
+		(if
+            (lt (get a) (int 2))
+            (int 1)
+            (add
+                (call fna (sub (get a) (int 1)))
+                (call fna (sub (get a) (int 2)))
+            )
+        )
 	))
-	(call fna 1 2 3 4)
+	(print (call fna (int 2)))
