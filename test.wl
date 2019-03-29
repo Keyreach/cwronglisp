@@ -12,5 +12,4 @@ do
 			(set i (add (get i) (int 1)))
 		)
 	)
-	(print (get fna))
 	(call fna 1)

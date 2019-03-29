@@ -206,7 +206,16 @@ func_call(vector arguments, vector ctx){
         vector_add(&new_scope, tmp);
         vector_add(&new_scope, exec(vector_get(arguments, i + 1), ctx, 0));
     }
-    result = exec(rnode_list(func->body), &new_scope, RWZR_EXEC_KEEP_AST);
+    result = exec(rnode_list(func->body), &new_scope, 0);
+    for(i = 0; i < new_scope.size; i++){
+		if(strcmp(new_scope.data[i]->data.str, "__parent") == 0){
+			rnode_free(new_scope.data[i]);
+			i++;
+		} else {
+			rnode_free(new_scope.data[i]);
+		}
+	}
+	free(new_scope.data);
     return result;
 }
 
