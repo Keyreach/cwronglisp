@@ -228,7 +228,6 @@ exec(rwzr_value ast, vector ctx, int flags){
             puts("int: nullptr exception");
         } else if(a->type != RWZR_TYPE_STRING){
             puts("int: wrong operands type");
-            return NULL;
         } else {
 			result = rnode_num(strtol(a->data.str, NULL, 10));
 		}
@@ -301,7 +300,7 @@ exec(rwzr_value ast, vector ctx, int flags){
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
             puts("add: wrong operands type");
         } else {
-			return rnode_num(a->data.num - b->data.num);
+			result = rnode_num(a->data.num - b->data.num);
 		}
 
     CASE_OPERATOR("mul")
@@ -446,7 +445,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 int main(){
     vector tokens = NULL;
     vector syntax_tree = NULL;
-    rwzr_value ast;
+    rwzr_value ast, ret;
     global_context = vector_new(1);
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
@@ -460,8 +459,9 @@ int main(){
     vector_destroy(tokens);
     puts("\nInterpreter output:");
     ast = rnode_list(syntax_tree);
-    exec(ast, global_context, 0);
+    ret = exec(ast, global_context, 0);
 	puts("Cleaning up: AST");
+	rnode_free(ret);
     rnode_free(ast);
     puts("Cleaning up: Context");
     vector_destroy(global_context);
