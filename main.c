@@ -390,7 +390,7 @@ exec(rwzr_value ast, vector ctx, int flags){
         if((a == NULL) || (b == NULL)){
 			puts("while: nullptr exception");
 		} else {
-			cond = exec(a, ctx, RWZR_EXEC_KEEP_AST);
+			cond = exec(a, ctx, 0);
 			if(cond == NULL){
 				puts("while: nullptr exception");
 			} else if(cond->type != RWZR_TYPE_NUMBER){
@@ -398,8 +398,9 @@ exec(rwzr_value ast, vector ctx, int flags){
 			} else {
 				while(cond->data.num != 0){
 					if(result != NULL) rnode_free(result);
-					result = exec(b, ctx, RWZR_EXEC_KEEP_AST);
-					cond = exec(a, ctx, RWZR_EXEC_KEEP_AST); // check condition here
+					result = exec(b, ctx, 0);
+					rnode_free(cond);
+					cond = exec(a, ctx, 0); // check condition here
 				}
 			}
 		}
