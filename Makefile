@@ -1,4 +1,10 @@
+CC=gcc
+EXECUTABLE=main.exe
+
 all: main.exe
 
-main.exe: vector.c vector.h main.c
-	gcc -o main.exe vector.c main.c
+$(EXECUTABLE): vector.c main.c
+	$(CC) -o $@ $^
+
+test: $(EXECUTABLE)
+	./$(EXECUTABLE) < test.wl

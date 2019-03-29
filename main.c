@@ -25,15 +25,11 @@ vector  global_context;
 rwzr_value
 pairlist_get(vector v, char* key){
     int i;
-    printf("key: %s\n", key);
-    vector_print(v);
-    puts("context");
     for(i = 0; i < v->size; i++){
         if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, v->data[i]->data.str) == 0)){
             return rnode_copy(v->data[i + 1]);
         }
     }
-    puts("lookup in parent");
     for(i = 0; i < v->size; i++){
         if((v->data[i]->type == RWZR_TYPE_SYMBOL) && (strcmp(key, "__parent") == 0)){
             return pairlist_get(v->data[i + 1]->data.list, key);
@@ -138,36 +134,51 @@ rwzr_lexer(char *code){
 
 vector
 rwzr_parser(vector tokens){
-    vector tree = vector_new(1);
-    struct vector branch;
-    vector_init(&branch, 1);
-    char *token;
+    vector output, branch, result = NULL;
+    rwzr_value token;
+    output = vector_new(1);
+    branch = vector_new(1);
+    vector_print(tokens);
+	puts("<- got tokens");
     size_t brackets = 0;
     size_t i, n = tokens->size;
     for(i = 0; i < n; i++){
-        token = vector_get(tokens, i)->data.str;
-        if(strcmp(token, "(") == 0){
+        token = vector_get(tokens, i);
+        if(strcmp(token->data.str, "(") == 0){
             if(brackets > 0){
-                vector_add(&branch, rnode_text(token));
-            }
+                vector_add(branch, token);
+            } else {
+				rnode_free(token);
+			}
             brackets++;
-        } else if(strcmp(token, ")") == 0) {
+        } else if(strcmp(token->data.str, ")") == 0) {
             brackets--;
             if(brackets > 0){
-                vector_add(&branch, rnode_text(token));
+                vector_add(branch, token);
             } else {
-                vector_add(tree, rnode_list(rwzr_parser(&branch)));
+				rnode_free(token);
+				vector_print(branch);
+				puts("<- branch");
+				result = rwzr_parser(branch);
+				vector_print(result);
+				printf("<- result for -> ");
+				vector_print(branch);
+				puts("");
+                vector_add(output, rnode_list(result));
+                vector_free(branch);
             }
         } else {
             if(brackets > 0){
-                vector_add(&branch, rnode_text(token));
+                vector_add(branch, token);
             } else {
-                vector_add(tree, rnode_text(token));
+                vector_add(output, token);
             }
         }
     }
-    vector_free(tokens);
-    return tree;
+    vector_destroy(branch);
+    vector_print(output);
+    puts(" <- tree");
+    return output;
 }
 
 rwzr_value
@@ -206,14 +217,10 @@ exec(rwzr_value ast, vector ctx, int flags){
     rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
         result = rnode_copy(ast);
-        rnode_print(ast);
         return result;
     }
     ops = ast->data.list;
     operator = exec(vector_get(ops, 0), ctx, 0)->data.str;
-    printf("operator: %s\n", operator);
-    vector_print(ops);
-    puts("");
     SWITCH_OPERATOR("int")
         a = exec(vector_get(ops, 1), ctx, 0);
         if(a == NULL){
@@ -227,6 +234,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 
     CASE_OPERATOR("do")
         for(i = 1; i < ops->size; i++){
+			if(result != NULL) rnode_free(result);
             result = exec(ops->data[i], ctx, 0);
         }
 
@@ -266,6 +274,8 @@ exec(rwzr_value ast, vector ctx, int flags){
         } else if(a->type == RWZR_TYPE_LIST){
             vector_print(a->data.list);
             printf("\n");
+        } else if(a->type == RWZR_TYPE_FUNCTION){
+			printf("<function>\n");
         } else {
             printf("print: wrong operand type %d\n", a->type);
         }
@@ -387,6 +397,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 				puts("while: type missmatch");
 			} else {
 				while(cond->data.num != 0){
+					if(result != NULL) rnode_free(result);
 					result = exec(b, ctx, RWZR_EXEC_KEEP_AST);
 					cond = exec(a, ctx, RWZR_EXEC_KEEP_AST); // check condition here
 				}
@@ -396,8 +407,6 @@ exec(rwzr_value ast, vector ctx, int flags){
     CASE_OPERATOR("func")
         a = vector_get(ops, 1);
         b = vector_get(ops, 2);
-        vector_print(a->data.list);
-        vector_print(b->data.list);
         result = rnode_func(
             vector_slice(a->data.list, 0, 0),
             vector_slice(b->data.list, 0, 0)
@@ -419,7 +428,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 }
 
 int main(){
-    vector tokens, syntax_tree;
+    vector tokens = NULL;
+    vector syntax_tree = NULL;
     global_context = vector_new(1);
     char *buffer = (char*)malloc(1024);
     fread(buffer, 1, 1024, stdin);
@@ -430,12 +440,13 @@ int main(){
     puts("\nParser output:");
     syntax_tree = rwzr_parser(tokens);
     vector_print(syntax_tree);
-    free(tokens);
+    vector_destroy(tokens);
+    /*
     puts("\nInterpreter output:");
     exec(rnode_list(syntax_tree), global_context, 0);
-    /* vector_free(syntax_tree);
-    if(syntax_tree != NULL) free(syntax_tree); */
-    vector_free(global_context);
-    if(global_context != NULL) free(global_context);
+    */
+    vector_destroy(syntax_tree);
+    vector_destroy(global_context);
+    print_allocations();
     return 0;
 }
