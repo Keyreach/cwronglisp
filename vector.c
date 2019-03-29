@@ -163,6 +163,8 @@ rnode_sym(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t)); rwzr_allocations++;
     value->type = RWZR_TYPE_SYMBOL;
     value->data.str = s;
+    printf("  created node: ");
+	rnode_print(value);
     return value;
 }
 
@@ -198,6 +200,11 @@ rnode_copy(rwzr_value v){
     case RWZR_TYPE_SYMBOL:
         value->data.str = v->data.str;
         break;
+    case RWZR_TYPE_FUNCTION:
+        value->data.func = (rwzr_function)malloc(sizeof(rwzr_function_t));
+        value->data.func->params = v->data.func->params;
+        value->data.func->body = v->data.func->body;
+        break;
     default:
         value->data = v->data;
     }
@@ -210,7 +217,7 @@ rwzr_value
 rnode_func(vector params, vector body){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t)); rwzr_allocations++;
     value->type = RWZR_TYPE_FUNCTION;
-    value->data.func = (rwzr_function)malloc(sizeof(rwzr_function_t)); rwzr_allocations++;
+    value->data.func = (rwzr_function)malloc(sizeof(rwzr_function_t));
     value->data.func->params = params;
     value->data.func->body = body;
     return value;
@@ -225,11 +232,16 @@ rnode_free(rwzr_value r){
     case RWZR_TYPE_LIST:
         vector_destroy(r->data.list);
         break;
-//    case RWZR_TYPE_FUNCTION:
-//		vector_destroy(r->data.func->params);
-//		vector_destroy(r->data.func->body);
-//		break;
+    case RWZR_TYPE_FUNCTION:
+        free(r->data.func);
+		break;
     }
+    free(r); rwzr_allocations -= 1;
+}
+
+void
+rnode_forget(rwzr_value r){
+	CNAD(r, "rnode free: null pointer")
     free(r); rwzr_allocations -= 1;
 }
 

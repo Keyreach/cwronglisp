@@ -51,6 +51,7 @@ rwzr_value  rnode_sym(char * s);
 rwzr_value  rnode_func(vector params, vector body);
 rwzr_value  rnode_copy(rwzr_value v);
 void        rnode_free(rwzr_value r);
+void        rnode_forget(rwzr_value r);
 void        rnode_print(rwzr_value r);
 
 void print_allocations();

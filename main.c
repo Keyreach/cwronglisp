@@ -184,13 +184,12 @@ rwzr_parser(vector tokens){
 rwzr_value
 func_call(vector arguments, vector ctx){
     int i;
-    rwzr_value result, tmp, func_name = vector_get(arguments, 0);
+    rwzr_value result = NULL, tmp = NULL, func_name = vector_get(arguments, 0);
     if((func_name == NULL) || (func_name->type != RWZR_TYPE_STRING)){
         puts("call: invalid identifier");
         return NULL;
     }
     rwzr_value func_data = pairlist_get(ctx, func_name->data.str);
-    rnode_free(func_name);
     if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION) || (func_data->data.func == NULL) || (func_data->data.func->body == NULL) || (func_data->data.func->params == NULL)){
         puts("call: no function");
         return NULL;
@@ -204,18 +203,25 @@ func_call(vector arguments, vector ctx){
         tmp = vector_get(func->params, i);
         tmp->type = RWZR_TYPE_SYMBOL;
         vector_add(&new_scope, tmp);
-        vector_add(&new_scope, exec(vector_get(arguments, i + 1), ctx, 0));
+        vector_add(&new_scope, exec(arguments->data[i + 1], ctx, 0));
     }
-    result = exec(rnode_list(func->body), &new_scope, 0);
+    tmp = rnode_list(func->body);
+    result = exec(tmp, &new_scope, 0);
     for(i = 0; i < new_scope.size; i++){
+        printf("freeing scope %d/%d\n", i, new_scope.size);
 		if(strcmp(new_scope.data[i]->data.str, "__parent") == 0){
 			rnode_free(new_scope.data[i]);
 			i++;
+            rnode_forget(new_scope.data[i]);
 		} else {
 			rnode_free(new_scope.data[i]);
 		}
 	}
 	free(new_scope.data);
+    rnode_forget(tmp);
+    vector_destroy(arguments);
+    rnode_free(func_data);
+    rnode_free(func_name);
     return result;
 }
 
@@ -415,11 +421,11 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("func")
-        a = vector_get(ops, 1);
-        b = vector_get(ops, 2);
+        //a = vector_get(ops, 1);
+        //b = vector_get(ops, 2);
         result = rnode_func(
-            vector_slice(a->data.list, 0, 0),
-            vector_slice(b->data.list, 0, 0)
+            ops->data[1]->data.list,
+            ops->data[2]->data.list
         );
 
     CASE_OPERATOR("call")
