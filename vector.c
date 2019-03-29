@@ -127,7 +127,7 @@ rnode_text(char* s){
     rwzr_value value = (rwzr_value)malloc(sizeof(rwzr_value_t)); rwzr_allocations++;
     value->type = RWZR_TYPE_STRING;
     value->data.str = s;
-    printf("created node: ");
+    printf("  created node: ");
 	rnode_print(value);
     return value;
 }
@@ -175,7 +175,7 @@ rnode_copy(rwzr_value v){
     default:
         value->data = v->data;
     }
-    printf("copied node: ");
+    printf("  copied node: ");
 	rnode_print(value);
     return value;
 }
@@ -193,12 +193,11 @@ rnode_func(vector params, vector body){
 void
 rnode_free(rwzr_value r){
 	CNAD(r, "rnode free: null pointer")
-	printf("freeing node: ");
+	printf("  freeing node: ");
 	rnode_print(r);
     switch(r->type){
     case RWZR_TYPE_LIST:
-        vector_free(r->data.list);
-        free(r->data.list); rwzr_allocations -= 1;
+        vector_destroy(r->data.list);
         break;
 //    case RWZR_TYPE_FUNCTION:
 //		vector_destroy(r->data.func->params);

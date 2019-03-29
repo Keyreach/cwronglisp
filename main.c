@@ -3,8 +3,8 @@
 #include <string.h>
 #include "vector.h"
 
-#define SWITCH_OPERATOR(x) if(strcmp(operator, x) == 0){
-#define CASE_OPERATOR(x) } else if(strcmp(operator, x) == 0) {
+#define SWITCH_OPERATOR(x) if(strcmp(operator->data.str, x) == 0){
+#define CASE_OPERATOR(x) } else if(strcmp(operator->data.str, x) == 0) {
 #define CASE_DEFAULT } else {
 #define CASE_END }
 
@@ -190,6 +190,7 @@ func_call(vector arguments, vector ctx){
         return NULL;
     }
     rwzr_value func_data = pairlist_get(ctx, func_name->data.str);
+    rnode_free(func_name);
     if((func_data == NULL) || (func_data->type != RWZR_TYPE_FUNCTION) || (func_data->data.func == NULL) || (func_data->data.func->body == NULL) || (func_data->data.func->params == NULL)){
         puts("call: no function");
         return NULL;
@@ -212,7 +213,7 @@ func_call(vector arguments, vector ctx){
 rwzr_value
 exec(rwzr_value ast, vector ctx, int flags){
     int i;
-    char* operator;
+    rwzr_value operator;
     vector ops = NULL;
     rwzr_value a = NULL, b = NULL, cond = NULL, result = NULL; // <- must rnode_free them or invent better approach to temp vars
     if(ast->type == RWZR_TYPE_STRING){
@@ -220,9 +221,9 @@ exec(rwzr_value ast, vector ctx, int flags){
         return result;
     }
     ops = ast->data.list;
-    operator = exec(vector_get(ops, 0), ctx, 0)->data.str;
+    operator = exec(ops->data[0], ctx, 0);
     SWITCH_OPERATOR("int")
-        a = exec(vector_get(ops, 1), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
         if(a == NULL){
             puts("int: nullptr exception");
         } else if(a->type != RWZR_TYPE_STRING){
@@ -242,8 +243,8 @@ exec(rwzr_value ast, vector ctx, int flags){
         result = rnode_list(vector_slice(ops, 1, 0));
 
     CASE_OPERATOR("set")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if((a == NULL) || (b == NULL)){
             puts("set: nullptr exception");
         } else if(a->type != RWZR_TYPE_STRING){
@@ -254,7 +255,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("get")
-        a = exec(vector_get(ops, 1), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
         if(a == NULL){
             puts("get: nullptr exception");
         } else if(a->type != RWZR_TYPE_STRING){
@@ -264,7 +265,7 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("print")
-        a = exec(vector_get(ops, 1), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
         if(a == NULL){
             puts("print: nullptr exception");
         } else if(a->type == RWZR_TYPE_STRING){
@@ -281,8 +282,8 @@ exec(rwzr_value ast, vector ctx, int flags){
         }
 
     CASE_OPERATOR("add")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -293,8 +294,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("sub")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -304,8 +305,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("mul")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -315,8 +316,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("div")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -326,8 +327,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("mod")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("add: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -337,8 +338,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("lt")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("lt: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -348,8 +349,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("gt")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("gt: nullptr exception");
         } else if((a->type != RWZR_TYPE_NUMBER) || (b->type != RWZR_TYPE_NUMBER)){
@@ -359,8 +360,8 @@ exec(rwzr_value ast, vector ctx, int flags){
 		}
 
     CASE_OPERATOR("eq")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("eq: nullptr exception");
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
@@ -372,8 +373,8 @@ exec(rwzr_value ast, vector ctx, int flags){
         }
         
     CASE_OPERATOR("ne")
-        a = exec(vector_get(ops, 1), ctx, 0);
-        b = exec(vector_get(ops, 2), ctx, 0);
+        a = exec(ops->data[1], ctx, 0);
+        b = exec(ops->data[2], ctx, 0);
         if(a == NULL){
             puts("ne: nullptr exception");
         } else if((a->type == RWZR_TYPE_NUMBER) && (b->type == RWZR_TYPE_NUMBER)){
@@ -385,8 +386,8 @@ exec(rwzr_value ast, vector ctx, int flags){
         }
 
     CASE_OPERATOR("while")
-        a = vector_get(ops, 1);
-        b = vector_get(ops, 2);
+        a = vector_get(ops, 1); //?
+        b = vector_get(ops, 2); //?
         if((a == NULL) || (b == NULL)){
 			puts("while: nullptr exception");
 		} else {
@@ -416,14 +417,29 @@ exec(rwzr_value ast, vector ctx, int flags){
         result = func_call(vector_slice(ops, 1, 0), ctx);
 
     CASE_DEFAULT
-        printf("Unknown operator: %s\n", operator);
+        printf("Unknown operator: %s\n", operator->data.str);
 
     CASE_END
-    if(a != NULL) rnode_free(a);
-    if(b != NULL) rnode_free(b);
-    if(cond != NULL) rnode_free(cond);
-    if(!(flags|RWZR_EXEC_KEEP_AST))
+    if(operator != NULL){
+		puts("free operator");
+		rnode_free(operator);
+	}
+    if(a != NULL){
+		puts("free a");
+		rnode_free(a);
+	}
+    if(b != NULL){
+		puts("free b");
+		rnode_free(b);
+	}
+    if(cond != NULL){
+		puts("free cond");
+		rnode_free(cond);
+	}
+    if(!(flags|RWZR_EXEC_KEEP_AST)){
+		puts("free ast");
 		rnode_free(ast);
+	}
     return result;
 }
 
@@ -441,11 +457,12 @@ int main(){
     syntax_tree = rwzr_parser(tokens);
     vector_print(syntax_tree);
     vector_destroy(tokens);
-    /*
+
     puts("\nInterpreter output:");
     exec(rnode_list(syntax_tree), global_context, 0);
-    */
+	puts("Cleaning up: AST");
     vector_destroy(syntax_tree);
+    puts("Cleaning up: Context");
     vector_destroy(global_context);
     print_allocations();
     return 0;
